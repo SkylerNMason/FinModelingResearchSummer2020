@@ -16,6 +16,7 @@ import sklearn.linear_model as sklm
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import sklearn
 import statsmodels.api as sm
+import featuretools as ft
 
 stdTestingRange = np.logspace(-3, 2, 100)
 
@@ -32,22 +33,28 @@ def normalizeData(xTrain, xTest, normalize, normFunc):
         return pd.DataFrame(xTrain), 0
     return xTrain, xTest
 
-def prepData(df, testSize, normalize, randomState, normFunc):
+def prepData(df, testSize, normalize, randomState, normFunc, primitives):
     # Takes a dataframe and splits it into independent/dependent varialbes
     # plus what the test and training set will be (randomly assigned)
 
-    # Parse the data:
+    # Parse and modify the data:
     x = df.iloc[:, 1:]
     y = df["Returns"]
+
+    # TODO make modifyData also save the new dataset
 
     # Split and normalize the data:
     if testSize is not 0:
         xTrain, xTest, yTrain, yTest = train_test_split(x, y, test_size=testSize,
                                                         random_state=randomState)
+        xTrain, xTest = modifyDataset(xTrain, primitives)[0],\
+                        modifyDataset(xTest, primitives)[0]
+        print(xTrain)
         xTrain, xTest = normalizeData(xTrain, xTest, normalize, normFunc)
         return xTrain, xTest, yTrain, yTest
     else: # No testing set
-        xTrain, xTest = normalizeData(x, 0, normalize, normFunc)
+        xTrain = modifyDataset(x, primitives)[0]
+        xTrain, xTest = normalizeData(xTrain, 0, normalize, normFunc)
         return xTrain, xTest, y, 0
 
 def testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest):
@@ -128,7 +135,7 @@ def historicalAvg(dfDict):
 
 
 def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
-              normFunc = StandardScaler):
+              normFunc = StandardScaler, primitives=None):
     # Takes in a dictionary of assets and uses multiple linear regression to
     # fit a model predicting the returns.
     # Currently there is test/training built into the function
@@ -137,7 +144,7 @@ def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
     for asset in dfDict:
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc)
+                                                randomState, normFunc, primitives)
 
         # Train the model:
         model = sklm.LinearRegression()
@@ -163,7 +170,7 @@ def logReg():
 
 def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
              randomState=None, alphaRange = stdTestingRange,
-             normalize=True, normFunc = StandardScaler):
+             normalize=True, normFunc = StandardScaler, primitives=None):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas damper coefficients (dense parameters still)
@@ -172,7 +179,8 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
         df = dfDict[asset]
 
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc)
+                                                randomState, normFunc,
+                                                primitives)
 
         # Train the model:
         if alpha is not -1:
@@ -205,7 +213,7 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
 # noinspection PyTypeChecker
 def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
              randomState=None, alphaRange=stdTestingRange,
-             normalize=True, normFunc = StandardScaler):
+             normalize=True, normFunc = StandardScaler, primitives=None):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas lead to more zero coefficients (sparse parameters)
@@ -215,7 +223,8 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
     for asset in dfDict:
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc)
+                                                randomState, normFunc,
+                                                primitives)
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
@@ -245,7 +254,7 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
 def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
                randomState=None, alphaRange=stdTestingRange,
                lambaRatio=np.logspace(-1,0,25), normalize=True,
-               normFunc = StandardScaler):
+               normFunc = StandardScaler, primitives=None):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas lead to more zero coefficients (sparse parameters)
@@ -255,7 +264,8 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
     for asset in dfDict:
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc)
+                                                randomState, normFunc,
+                                                primitives)
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
@@ -290,6 +300,7 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
 
 
 # File Testing:
+dfDict = generateDfDict()
 
 def callFuncs(includeMulLinReg = False, **kwargs):
     # Calls the various above models for testing with
@@ -307,9 +318,9 @@ def test(randomState=None):
     # Possible parameters to include:
     # dfDict, testSize, alpha, minRsqrDifScorer, randomState,
     # alphaRange, lambdaRatio, normalize, normFunc
-    dfDict = generateDfDict()
 
-    kwargs = {'dfDict': dfDict, 'randomState': randomState}
+
+    kwargs = {'dfDict': dfDict, 'randomState': randomState, 'primitives': "All"}
     callFuncs(True, **kwargs)
 
     print("\n\n\n\n\n\nStage 1 Done\n\n\n\n\n\n")

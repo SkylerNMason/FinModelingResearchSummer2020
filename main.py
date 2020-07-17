@@ -13,6 +13,7 @@ cvxopt
 sklearn
 statsmodels
 arch
+featuretools
 """
 
 from DataManipulation import *
