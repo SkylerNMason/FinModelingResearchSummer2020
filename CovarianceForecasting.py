@@ -1,4 +1,4 @@
-from DataManipulation import *
+from DataGeneration import *
 
 from Plotting import *
 from random import gauss

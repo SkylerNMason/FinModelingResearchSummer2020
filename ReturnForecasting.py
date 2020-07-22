@@ -6,12 +6,12 @@
 #https://www.aclweb.org/anthology/W19-6403.pdf
 #
 
-from DataManipulation import *
+from DataGeneration import *
+from DataPreprocessing import *
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 import sklearn.linear_model as sklm
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import sklearn
@@ -19,43 +19,9 @@ import statsmodels.api as sm
 import featuretools as ft
 
 stdTestingRange = np.logspace(-3, 2, 100)
+dfDict = generateDfDict()
 
 # Helper functions:
-
-def normalizeData(xTrain, xTest, normalize, normFunc):
-    # Returns x and y data
-    if normalize is True:
-        scalar = normFunc()
-        xTrain = scalar.fit_transform(xTrain)
-        if xTest is not 0:
-            xTest = scalar.transform(xTest)
-            return pd.DataFrame(xTrain), pd.DataFrame(xTest)
-        return pd.DataFrame(xTrain), 0
-    return xTrain, xTest
-
-def prepData(df, testSize, normalize, randomState, normFunc, primitives):
-    # Takes a dataframe and splits it into independent/dependent varialbes
-    # plus what the test and training set will be (randomly assigned)
-
-    # Parse and modify the data:
-    x = df.iloc[:, 1:]
-    y = df["Returns"]
-
-    # TODO make modifyData also save the new dataset
-
-    # Split and normalize the data:
-    if testSize is not 0:
-        xTrain, xTest, yTrain, yTest = train_test_split(x, y, test_size=testSize,
-                                                        random_state=randomState)
-        xTrain, xTest = modifyDataset(xTrain, primitives)[0],\
-                        modifyDataset(xTest, primitives)[0]
-        print(xTrain)
-        xTrain, xTest = normalizeData(xTrain, xTest, normalize, normFunc)
-        return xTrain, xTest, yTrain, yTest
-    else: # No testing set
-        xTrain = modifyDataset(x, primitives)[0]
-        xTrain, xTest = normalizeData(xTrain, 0, normalize, normFunc)
-        return xTrain, xTest, y, 0
 
 def testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest):
     # Predicts and prints the results for testing a model
@@ -118,8 +84,7 @@ def minRsqrDif(model, xTrain, xTest, yTrain, yTest,
     testRsqr = model.score(xTest, yTest)
     rsqrDif = abs(trainRsqr - testRsqr)/abs(testRsqr)
     #print(abs(trainRsqr - testRsqr), rsqrDif, testRsqr)
-    if bestScore is None or (rsqrDif <= bestScore
-        and testRsqr >= 0):
+    if bestScore is None or (rsqrDif <= bestScore):
         #print(rsqrDif, testAdjRsqr, "hereeeee")
         return rsqrDif, model
     return bestScore, bestModel
@@ -135,7 +100,7 @@ def historicalAvg(dfDict):
 
 
 def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
-              normFunc = StandardScaler, primitives=None):
+              normFunc = StandardScaler, primitives=None, **excess):
     # Takes in a dictionary of assets and uses multiple linear regression to
     # fit a model predicting the returns.
     # Currently there is test/training built into the function
@@ -167,10 +132,9 @@ def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
 def logReg():
     return
 
-
 def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
-             randomState=None, alphaRange = stdTestingRange,
-             normalize=True, normFunc = StandardScaler, primitives=None):
+             randomState=None, alphaRange = stdTestingRange, normalize=True,
+             normFunc = StandardScaler, primitives=None, **excess):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas damper coefficients (dense parameters still)
@@ -212,14 +176,14 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
 
 # noinspection PyTypeChecker
 def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
-             randomState=None, alphaRange=stdTestingRange,
-             normalize=True, normFunc = StandardScaler, primitives=None):
+             randomState=None, alphaRange=stdTestingRange, normalize=True,
+             normFunc = StandardScaler, primitives=None, **excess):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas lead to more zero coefficients (sparse parameters)
     # This helps provide simplicity in the model
     models = dict()
-
+    print("got here")
     for asset in dfDict:
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
@@ -228,33 +192,39 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
+            print("heyo-1")
             model = sklm.Lasso(alpha=alpha)
             fitModel = model.fit(xTrain, yTrain)
             models[asset] = fitModel
 
         elif minRsqrDifScorer is True: # Use our own scoring method
             bestScore, bestModel = None, None
+            print("heyo")
             for a in alphaRange:
-                model = sklm.LassoCV(cv=10, alphas=[a])
+                print("heyo2")
+                model = sklm.Lasso(alpha=a) # Use Lasso or LassoCV?
                 fitModel = model.fit(xTrain, yTrain)
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                   yTrain, yTest, bestScore, bestModel)
             models[asset] = bestModel
 
         else: # Perform 10-fold cross validation to find optimal alpha value
+            print("heyo4")
             model = sklm.LassoCV(cv = 10, alphas=alphaRange)
             fitModel = model.fit(xTrain, yTrain)
             models[asset] = fitModel
 
         # Test the model:
+        print("heyo5")
         testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
 
     return models
 
 def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
                randomState=None, alphaRange=stdTestingRange,
-               lambaRatio=np.logspace(-1,0,25), normalize=True,
-               normFunc = StandardScaler, primitives=None):
+               normalize=True, normFunc = StandardScaler,
+               primitives=None,lambaRatio=np.logspace(-1,0,25),
+               **excess):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas lead to more zero coefficients (sparse parameters)
@@ -300,12 +270,19 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
 
 
 # File Testing:
-dfDict = generateDfDict()
 
-def callFuncs(includeMulLinReg = False, **kwargs):
+def defaultModelKwargs():
+    kwargs = {"dfDict": dfDict, "testSize": .2, "alpha": -1,
+              "minRsqrDifScorer": False, "randomState": None,
+              "alphaRange": stdTestingRange, "normalize": True,
+              "normFunc": StandardScaler, "primitives": None,
+              "lambdaRatio": np.logspace(-1,0,25)}
+    return kwargs
+
+def callFuncs(**kwargs):
     # Calls the various above models for testing with
     # **kwargs as the inputs
-    #if includeMulLinReg: mulLinReg(**kwargs)
+    #mulLinReg(**kwargs)
     #ridgeReg(**kwargs)
     lassoReg(**kwargs)
     #elasticNet(**kwargs)
@@ -319,9 +296,12 @@ def test(randomState=None):
     # dfDict, testSize, alpha, minRsqrDifScorer, randomState,
     # alphaRange, lambdaRatio, normalize, normFunc
 
+    # Default model kwargs:
+    kwargs = defaultModelKwargs()
 
-    kwargs = {'dfDict': dfDict, 'randomState': randomState, 'primitives': "All"}
-    callFuncs(True, **kwargs)
+    # Different testing kwargs:
+    kwargs.update({'randomState': randomState, 'primitives': "All"})
+    callFuncs(**kwargs)
 
     print("\n\n\n\n\n\nStage 1 Done\n\n\n\n\n\n")
 

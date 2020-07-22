@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-import featuretools as ft
+from DataPreprocessing import *
 
 
 
@@ -69,35 +69,13 @@ def generateDfDict():
             searching = False
     return dfDict
 
-def modifyDataset(df, primitives):
-    # Uses deep feature synthesis to create
-    # a bunch of potentially useful variables
-    if primitives is None:
-        return df.iloc[:, 1:], 0
-    if primitives is "All":
-        allPrims = ft.list_primitives()
-        transformPrims = allPrims[allPrims.type == "transform"]["name"]
-        primitives = transformPrims[2:3]
-    es = ft.EntitySet()
-    es = es.entity_from_dataframe(entity_id = "asset", dataframe=df,
-                                  time_index = "Date", make_index=True,
-                                  index = "index")
-    featureMatrix, featureDef = ft.dfs(entityset = es, target_entity = "asset",
-                                       max_depth = 1, trans_primitives=primitives,
-                                       verbose=2)
-    print(featureDef)
-    featureMatrix, featureDef = ft.encode_features(featureMatrix, featureDef)
-    featureMatrix.dropna(inplace = True)
-    return featureMatrix, featureDef
-
 def buildDf(fileLocation, startRow, fileType, timeFormat):
-    # Takes a csv file at fileLocation and builds a matrix out of
+    # Takes a csv/xlsx file at fileLocation and builds a matrix out of
     # the given variables.
     # TODO: Make a better description. Involve what the csv file should look like.
     # TODO: Implement startRow
     # First col = date, second col = dependent variable (returns)
-    #Use empty spaces for na_values
-    # Drops any NA values
+    # Use empty spaces for na_values
     try:
         if (fileType == "xlsx"):
             df = pd.read_excel(fileLocation, na_values=[""])
@@ -106,11 +84,12 @@ def buildDf(fileLocation, startRow, fileType, timeFormat):
 
         # Reshuffle data order and fix format:
         colNames = list(df.columns)
-        df[colNames[0]], df[colNames[1]] = df[colNames[1]], df[colNames[0]]
-        df.rename(columns = {colNames[0] : "Returns",
-                             colNames[1]: "Date"}, inplace = True)
+        newOrder = [colNames[1], colNames[0]] + colNames[2:]
+        df = df.reindex(columns=newOrder)
+        df.rename(columns = {colNames[1] : "Returns",
+                             colNames[0]: "Date"}, inplace = True)
         df["Date"] = pd.to_datetime(df["Date"], format=timeFormat)
-        return df.dropna()
+        return df
 
     except:
         print("Error: " + fileLocation + " uses incorrect data formatting and was ignored")

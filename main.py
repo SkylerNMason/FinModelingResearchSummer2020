@@ -16,7 +16,7 @@ arch
 featuretools
 """
 
-from DataManipulation import *
+from DataGeneration import *
 from PortfolioCreation import *
 import os
 

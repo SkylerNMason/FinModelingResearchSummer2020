@@ -1,4 +1,4 @@
-from DataManipulation import *
+from DataGeneration import *
 import numpy as np
 import cvxopt as opt
 from cvxopt import blas, solvers
