@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from DataPreprocessing import *
+#from DataPreprocessing import *
 
 
 
@@ -94,3 +94,29 @@ def buildDf(fileLocation, startRow, fileType, timeFormat):
     except:
         print("Error: " + fileLocation + " uses incorrect data formatting and was ignored")
         return 0
+
+def saveData(assetName, testSize, xTrain=None, xTest=None,
+             yTrain=None, yTest=None, df=None):
+    if xTrain is not None:
+        numFeat = len(xTrain.columns)
+        # Rebuild dataframe:
+        colNames = list(yTrain.columns) + list(xTrain.columns)
+        x = pd.concat([xTrain, xTest], axis=0, ignore_index=True)
+        y = pd.concat([yTrain, yTest], axis=0, ignore_index=True)
+        df = pd.concat([y, x], axis=1, ignore_index=True)
+        df.columns = colNames
+        print(df)
+
+    else:
+        numFeat = len(df.columns[2:])
+
+
+    filename = (assetName.rsplit(".", 1)[0] + ", testSize " +
+                str(int(testSize*100)) + "%, Features " + str(numFeat)
+                + ".xlsx")
+
+    path = "Data" + os.sep + "SavedData" + os.sep + str(filename)
+    print(path)
+    df.to_excel(path)
+
+    return

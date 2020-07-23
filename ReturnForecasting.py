@@ -188,7 +188,7 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
                                                 randomState, normFunc,
-                                                primitives)
+                                                primitives, asset)
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
@@ -300,7 +300,8 @@ def test(randomState=None):
     kwargs = defaultModelKwargs()
 
     # Different testing kwargs:
-    kwargs.update({'randomState': randomState, 'primitives': "All"})
+    kwargs.update({'randomState': randomState, 'primitives': "All",
+                   "normalize": True})
     callFuncs(**kwargs)
 
     print("\n\n\n\n\n\nStage 1 Done\n\n\n\n\n\n")
