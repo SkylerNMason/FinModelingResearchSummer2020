@@ -116,7 +116,6 @@ def saveData(assetName, testSize, xTrain=None, xTest=None,
                 + ".xlsx")
 
     path = "Data" + os.sep + "SavedData" + os.sep + str(filename)
-    print(path)
     df.to_excel(path)
 
     return

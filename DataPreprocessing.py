@@ -92,7 +92,6 @@ def prepData(df, testSize, normalize, randomState, normFunc, primitives,
     # plus what the test and training set will be (randomly assigned)
     if debug: print("Prepping")
     # Parse and clean:
-    print(df)
     xTrain, xTest, yTrain, yTest = cleanData(df, testSize, randomState)
 
     # TODO make modifyData also save the new dataset
