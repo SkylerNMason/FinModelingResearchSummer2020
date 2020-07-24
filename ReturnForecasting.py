@@ -21,6 +21,9 @@ import featuretools as ft
 stdTestingRange = np.logspace(-3, 2, 100)
 dfDict = generateDfDict()
 
+debug = True
+#pd.set_option('display.max_columns', 6)
+
 # Helper functions:
 
 def testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest):
@@ -58,6 +61,7 @@ def printResults(model, asset, xTrain, xTest, yTrain, yTest, yPred):
     plt.title(str(model)[:str(model).find("(")])
     plt.show()'''
         # Statistics:
+
     print('Mean Absolute Error:', sklearn.metrics.mean_absolute_error(
         yTest, yPred))
     print('Mean Squared Error:', sklearn.metrics.mean_squared_error(
@@ -108,12 +112,12 @@ def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
 
     for asset in dfDict:
         df = dfDict[asset]
-        xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc, primitives)
+        xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize, randomState,
+                                                normFunc, primitives, asset)
 
         # Train the model:
         model = sklm.LinearRegression()
-        fitModel = model.fit(xTrain, yTrain)
+        fitModel = model.fit(xTrain, yTrain.values.ravel())
         models[asset] = fitModel
 
         # Test the model:
@@ -144,19 +148,19 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
 
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
                                                 randomState, normFunc,
-                                                primitives)
+                                                primitives, asset)
 
         # Train the model:
         if alpha is not -1:
             model = sklm.Ridge(alpha=alpha)
-            fitModel = model.fit(xTrain, yTrain)
+            fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
         elif minRsqrDifScorer is True: # Use our own scoring method
             bestScore, bestModel = None, None
             for a in alphaRange:
                 model = sklm.RidgeCV(alphas=[a])
-                fitModel = model.fit(xTrain, yTrain)
+                fitModel = model.fit(xTrain, yTrain.values.ravel())
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                   yTrain, yTest, bestScore, bestModel)
             models[asset] = bestModel
@@ -165,11 +169,12 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
         else: # Perform Leave-One-Out cross validation
               # to find optimal alpha value
             model = sklm.RidgeCV(alphas = alphaRange)
-            fitModel = model.fit(xTrain, yTrain)
+            fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
         # Test the model:
         testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
+        saveModel(models[asset], input("Filename to save the above model: "))
 
     return models
 
@@ -183,8 +188,9 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
     # Larger alphas lead to more zero coefficients (sparse parameters)
     # This helps provide simplicity in the model
     models = dict()
-    print("got here")
+    if debug: print("Lasso Reg")
     for asset in dfDict:
+        if debug: print("Made it to:", asset)
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
                                                 randomState, normFunc,
@@ -192,31 +198,31 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
-            print("heyo-1")
+            if debug: print("heyo-1")
             model = sklm.Lasso(alpha=alpha)
-            fitModel = model.fit(xTrain, yTrain)
+            fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
         elif minRsqrDifScorer is True: # Use our own scoring method
             bestScore, bestModel = None, None
-            print("heyo")
+            if debug: print("heyo")
             for a in alphaRange:
-                print("heyo2")
-                model = sklm.Lasso(alpha=a) # Use Lasso or LassoCV?
-                fitModel = model.fit(xTrain, yTrain)
+                model = sklm.LassoCV(cv = 10, alphas=[a]) # Use Lasso or LassoCV?
+                fitModel = model.fit(xTrain, yTrain.values.ravel())
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                   yTrain, yTest, bestScore, bestModel)
             models[asset] = bestModel
 
         else: # Perform 10-fold cross validation to find optimal alpha value
-            print("heyo4")
+            if debug: print("heyo4")
             model = sklm.LassoCV(cv = 10, alphas=alphaRange)
-            fitModel = model.fit(xTrain, yTrain)
+            fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
         # Test the model:
-        print("heyo5")
+        if debug: print("heyo5")
         testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
+        saveModel(models[asset], input("Filename to save the above model: "))
 
     return models
 
@@ -235,12 +241,12 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
         df = dfDict[asset]
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
                                                 randomState, normFunc,
-                                                primitives)
+                                                primitives, asset)
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
             model = sklm.Lasso(alpha=alpha)
-            fitModel = model.fit(xTrain, yTrain)
+            fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
         elif minRsqrDifScorer is True: # Use our own scoring method
@@ -249,7 +255,7 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
             for a in alphaRange:
                 for l in lambaRatio:
                     model = sklm.ElasticNetCV(cv=10, alphas=[a], l1_ratio=l)
-                    fitModel = model.fit(xTrain, yTrain)
+                    fitModel = model.fit(xTrain, yTrain.values.ravel())
                     bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                       yTrain, yTest, bestScore, bestModel)
             models[asset] = bestModel
@@ -257,11 +263,12 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
         else: # Perform 10-fold cross validation to find optimal alpha value
             model = sklm.ElasticNetCV(cv = 10, alphas=alphaRange,
                                       l1_ratio=lambaRatio)
-            fitModel = model.fit(xTrain, yTrain)
+            fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
         # Test the model:
         testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
+        saveModel(models[asset], input("Filename to save the above model: "))
 
     return models
 
@@ -290,6 +297,7 @@ def callFuncs(**kwargs):
 
 from sklearn.utils.testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
+
 @ignore_warnings(category=ConvergenceWarning)
 def test(randomState=None):
     # Possible parameters to include:
@@ -300,14 +308,14 @@ def test(randomState=None):
     kwargs = defaultModelKwargs()
 
     # Different testing kwargs:
-    kwargs.update({'randomState': randomState, 'primitives': "All",
+    kwargs.update({'randomState': randomState, 'primitives': 'fed',
                    "normalize": True})
     callFuncs(**kwargs)
 
     print("\n\n\n\n\n\nStage 1 Done\n\n\n\n\n\n")
 
-    kwargs.update({'minRsqrDifScorer': True})
-    #callFuncs(**kwargs)
+    #kwargs.update({'minRsqrDifScorer': True})
+    callFuncs(**kwargs)
 
     print("Done")
     return
