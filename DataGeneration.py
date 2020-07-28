@@ -140,4 +140,4 @@ def saveModel(model, filename):
 def loadModel(filename):
     # Loads models from Data/SavedModels
     path = "Data" + os.sep + "SavedModels" + os.sep + str(filename)
-    return load(filename)
+    return load(path)

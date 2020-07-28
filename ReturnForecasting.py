@@ -179,7 +179,6 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
     return models
 
 
-# noinspection PyTypeChecker
 def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
              randomState=None, alphaRange=stdTestingRange, normalize=True,
              normFunc = StandardScaler, primitives=None, **excess):
