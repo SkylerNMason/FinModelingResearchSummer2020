@@ -16,24 +16,24 @@ import sklearn.linear_model as sklm
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import sklearn
 import statsmodels.api as sm
-import featuretools as ft
 
 stdTestingRange = np.logspace(-3, 2, 100)
-dfDict = generateDfDict()
 
 debug = True
-#pd.set_option('display.max_columns', 6)
+pd.set_option('display.max_rows', None)
 
 # Helper functions:
 
-def testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest):
+def testModels(testSize, models, dfDict):
     # Predicts and prints the results for testing a model
-    if testSize is not 0:
-        yPred = models[asset].predict(xTest)
-        printResults(models[asset], asset, xTrain, xTest, yTrain, yTest, yPred)
-    else:
-        yPred = models[asset].predict(xTrain)
-        printResults(models[asset], asset, xTrain, 0, yTrain, yTrain, yPred)
+    for asset in dfDict:
+        xTrain, xTest, yTrain, yTest = dfDict[asset]
+        if testSize is not 0:
+            yPred = models[asset].predict(xTest)
+            printResults(models[asset], asset, xTrain, xTest, yTrain, yTest, yPred)
+        else:
+            yPred = models[asset].predict(xTrain)
+            printResults(models[asset], asset, xTrain, 0, yTrain, yTrain, yPred)
     return
 
 def printResults(model, asset, xTrain, xTest, yTrain, yTest, yPred):
@@ -103,25 +103,27 @@ def historicalAvg(dfDict):
     return returnVec
 
 
-def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
-              normFunc = StandardScaler, primitives=None, **excess):
+def mulLinReg(dfDict, **excess):
     # Takes in a dictionary of assets and uses multiple linear regression to
     # fit a model predicting the returns.
     # Currently there is test/training built into the function
     models = dict()
 
     for asset in dfDict:
-        df = dfDict[asset]
-        xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize, randomState,
-                                                normFunc, primitives, asset)
+        xTrain, xTest, yTrain, yTest = dfDict[asset]
 
         # Train the model:
         model = sklm.LinearRegression()
         fitModel = model.fit(xTrain, yTrain.values.ravel())
         models[asset] = fitModel
 
-        # Test the model:
-        testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
+        # Save the model:
+        information = {"asset": asset.rsplit(".", 1)[0],
+                       "testSize": excess["testSize"],
+                       "numFeat": len(xTrain.columns),
+                       "model": str(type(models[asset]).__name__)}
+        filename = nameSave(**information)
+        saveModel(models[asset], filename)
         '''
         # From statsmodels, use to get detailed stats:
         xTrain = sm.add_constant(xTrain)
@@ -136,19 +138,14 @@ def mulLinReg(dfDict, testSize = .2, randomState=None, normalize=True,
 def logReg():
     return
 
-def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
-             randomState=None, alphaRange = stdTestingRange, normalize=True,
-             normFunc = StandardScaler, primitives=None, **excess):
+def ridgeReg(dfDict, alpha = -1, minRsqrDifScorer = False,
+             alphaRange = stdTestingRange, **excess):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas damper coefficients (dense parameters still)
     models = dict()
     for asset in dfDict:
-        df = dfDict[asset]
-
-        xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc,
-                                                primitives, asset)
+        xTrain, xTest, yTrain, yTest = dfDict[asset]
 
         # Train the model:
         if alpha is not -1:
@@ -172,16 +169,19 @@ def ridgeReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
             fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
-        # Test the model:
-        testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
-        saveModel(models[asset], input("Filename to save the above model: "))
+        # Save the model:
+        information = {"asset": asset.rsplit(".", 1)[0],
+                       "testSize": excess["testSize"],
+                       "numFeat": len(xTrain.columns),
+                       "model": str(type(models[asset]).__name__)}
+        filename = nameSave(**information)
+        saveModel(models[asset], filename)
 
     return models
 
 
-def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
-             randomState=None, alphaRange=stdTestingRange, normalize=True,
-             normFunc = StandardScaler, primitives=None, **excess):
+def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
+             alphaRange=stdTestingRange, **excess):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
     # Larger alphas lead to more zero coefficients (sparse parameters)
@@ -190,10 +190,7 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
     if debug: print("Lasso Reg")
     for asset in dfDict:
         if debug: print("Made it to:", asset)
-        df = dfDict[asset]
-        xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc,
-                                                primitives, asset)
+        xTrain, xTest, yTrain, yTest = dfDict[asset]
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
@@ -216,19 +213,22 @@ def lassoReg(dfDict, testSize = .2, alpha = -1, minRsqrDifScorer = False,
             if debug: print("heyo4")
             model = sklm.LassoCV(cv = 10, alphas=alphaRange)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
+            print(pd.DataFrame(np.array(list(zip(fitModel.coef_, xTrain.columns))).reshape(-1,2)))
             models[asset] = fitModel
 
-        # Test the model:
+        # Save the model:
         if debug: print("heyo5")
-        testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
-        saveModel(models[asset], input("Filename to save the above model: "))
+        information = {"asset": asset.rsplit(".", 1)[0],
+                       "testSize": excess["testSize"],
+                       "numFeat": len(xTrain.columns),
+                       "model": str(type(models[asset]).__name__)}
+        filename = nameSave(**information)
+        saveModel(models[asset], filename)
 
     return models
 
-def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
-               randomState=None, alphaRange=stdTestingRange,
-               normalize=True, normFunc = StandardScaler,
-               primitives=None,lambaRatio=np.logspace(-1,0,25),
+def elasticNet(dfDict, alpha=-1, minRsqrDifScorer=False,
+               alphaRange=stdTestingRange, lambaRatio=np.logspace(-1,0,25),
                **excess):
     # Note, smaller alpha provides for greater fitting/more complexity
     # Alpha of zero is the same as mulLinReg
@@ -237,10 +237,7 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
     models = dict()
 
     for asset in dfDict:
-        df = dfDict[asset]
-        xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc,
-                                                primitives, asset)
+        xTrain, xTest, yTrain, yTest = dfDict[asset]
 
         # Train the model:
         if alpha is not -1: # Use user inputted alpha
@@ -265,9 +262,13 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
             fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = fitModel
 
-        # Test the model:
-        testModel(testSize, models, asset, xTrain, xTest, yTrain, yTest)
-        saveModel(models[asset], input("Filename to save the above model: "))
+        # Save the model:
+        information = {"asset": asset.rsplit(".", 1)[0],
+                       "testSize": excess["testSize"],
+                       "numFeat": len(xTrain.columns),
+                       "model": str(type(models[asset]).__name__)}
+        filename = nameSave(**information)
+        saveModel(models[asset], filename)
 
     return models
 
@@ -277,8 +278,34 @@ def elasticNet(dfDict, testSize=.2, alpha=-1, minRsqrDifScorer=False,
 
 # File Testing:
 
-def defaultModelKwargs():
-    kwargs = {"dfDict": dfDict, "testSize": .2, "alpha": -1,
+def updateDict(**kwargs):
+    fileLocation = kwargs["fileLocation"]
+    timeFormat = kwargs["timeFormat"]
+    testSize = kwargs["testSize"]
+    normalize = kwargs["normalize"]
+    randomState = kwargs["randomState"]
+    normFunc = kwargs["normFunc"]
+    primitives = kwargs["primitives"]
+    new = {"dfDict": generateDfDict(fileLocation, timeFormat, testSize, normalize,
+                                    randomState, normFunc, primitives)}
+    kwargs.update(new)
+    return kwargs
+
+def defaultModelKwargs(randomState):
+    # fileLocation = input("File or folder path: ")
+    # timeFormat = input("Date format of your dates ("%Y%m%d", etc): ")
+    fileLocation = "E:\ProgrammingProjects\FinModelingResearchSummer2020\Data"
+    timeFormat = None # Defaultly uses inferred time,
+    # Make something like %Y%m to not use this feature
+    testSize = .2
+    normalize = True
+    normFunc = StandardScaler
+    primitives = None
+    dfDict = generateDfDict(fileLocation, timeFormat, testSize, normalize,
+                            randomState, normFunc, primitives)
+
+    kwargs = {"dfDict": dfDict, "fileLocation": fileLocation,
+              "timeFormat": timeFormat, "testSize": .2, "alpha": -1,
               "minRsqrDifScorer": False, "randomState": None,
               "alphaRange": stdTestingRange, "normalize": True,
               "normFunc": StandardScaler, "primitives": None,
@@ -288,10 +315,12 @@ def defaultModelKwargs():
 def callFuncs(**kwargs):
     # Calls the various above models for testing with
     # **kwargs as the inputs
-    #mulLinReg(**kwargs)
-    #ridgeReg(**kwargs)
-    lassoReg(**kwargs)
-    #elasticNet(**kwargs)
+    dfDict = kwargs["dfDict"]
+    testSize = kwargs["testSize"]
+    #testModels(testSize, mulLinReg(**kwargs), dfDict)
+    #testModels(testSize, ridgeReg(**kwargs), dfDict)
+    testModels(testSize, lassoReg(**kwargs), dfDict)
+    #testModels(testSize, elasticNet(**kwargs), dfDict)
     return
 
 from sklearn.utils.testing import ignore_warnings
@@ -304,17 +333,18 @@ def test(randomState=None):
     # alphaRange, lambdaRatio, normalize, normFunc
 
     # Default model kwargs:
-    kwargs = defaultModelKwargs()
+    kwargs = defaultModelKwargs(randomState)
 
     # Different testing kwargs:
     kwargs.update({'randomState': randomState, 'primitives': 'fed',
                    "normalize": True})
+    kwargs = updateDict(**kwargs)
     callFuncs(**kwargs)
 
     print("\n\n\n\n\n\nStage 1 Done\n\n\n\n\n\n")
 
     #kwargs.update({'minRsqrDifScorer': True})
-    callFuncs(**kwargs)
+    #callFuncs(**kwargs)
 
     print("Done")
     return

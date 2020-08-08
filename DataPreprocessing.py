@@ -1,12 +1,11 @@
-
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import featuretools as ft
 from sklearn.impute import SimpleImputer
 import numpy as np
-from DataGeneration import saveData
 from featuretools.primitives import make_trans_primitive
 from featuretools.variable_types import Numeric
+import os
 
 debug = True
 
@@ -79,16 +78,61 @@ def cleanData(df=None, testSize=-1, randomState=None, xTrain=None, xTest=None):
 
 # Prepare the data:
 
+def nameSave(**information):
+    filename = (information["asset"] + ", testSize " +
+                str(int(information["testSize"]*100)) + "%, "
+                + str(information["numFeat"]) + " Features")
+    try:
+        filename += ", " + information["model"]
+    except: pass
+    return filename
+
+def saveData(assetName, testSize=-1, xTrain=None, xTest=None,
+             yTrain=None, yTest=None, df=None, bothXandY=True):
+    # Rebuilds dataframe and saves it
+    if xTrain is not None:
+        numFeat = len(xTrain.columns[1:])
+        # Rebuild dataframe:
+        colNames = list(xTrain.columns)
+        x = pd.concat([xTrain, xTest], axis=0, ignore_index=True)
+        df = x
+        df.columns = colNames
+        if bothXandY:
+            y = pd.concat([yTrain, yTest], axis=0, ignore_index=True)
+            df = pd.concat([y, x], axis=1, ignore_index=True)
+            # Fix formatting so that the dates column comes first:
+            colNames = list(yTrain.columns) + list(xTrain.columns)
+            newOrder = [colNames[1], colNames[0]] + colNames[2:]
+            df.columns = colNames
+            df = df.reindex(columns=newOrder)
+            df.rename(columns={colNames[0]: "Returns",
+                               colNames[1]: "Date"}, inplace=True)
+
+    else: # Dealing with a single df
+        if bothXandY: numFeat = len(df.columns[2:])
+        else: numFeat= len(df.columns)
+
+    information = {"asset": assetName.rsplit(".", 1)[0], "testSize": testSize,
+                   "numFeat": numFeat}
+    filename = nameSave(**information) + ".xlsx"
+
+    path = "Data" + os.sep + "SavedData" + os.sep + str(filename)
+    df.to_excel(path, index=False)
+    return
+
 def normalizeData(xTrain, xTest, normalize, normFunc):
     # Returns x and y data
     if debug: print("Started normalizing")
     if normalize is True:
+        colNames = list(xTrain.columns)
         scalar = normFunc()
-        xTrain = scalar.fit_transform(xTrain)
+        xTrain = pd.DataFrame(scalar.fit_transform(xTrain))
+        xTrain.columns = colNames
         if xTest is not 0:
-            xTest = scalar.transform(xTest)
-            return pd.DataFrame(xTrain), pd.DataFrame(xTest)
-        return pd.DataFrame(xTrain), 0
+            xTest = pd.DataFrame(scalar.transform(xTest))
+            xTest.columns = colNames
+            return xTrain, xTest
+        return xTrain, 0
     return xTrain, xTest
 
 def prepData(df, testSize, normalize, randomState, normFunc, primitives,
@@ -104,9 +148,13 @@ def prepData(df, testSize, normalize, randomState, normFunc, primitives,
     # Perform feature engineering:
     if primitives is not None:
         xTrain, xTest = modifyDataset(xTrain, xTest, randomState, primitives)
-    saveData(assetName, xTrain=xTrain, xTest=xTest, yTrain=yTrain, yTest=yTest)
+        saveData(assetName, testSize, xTrain=xTrain, xTest=xTest, yTrain=yTrain,
+             yTest=yTest)
+    colNames = list(xTrain.columns)[1:]
     xTrain = xTrain.iloc[:,1:]
     xTest = xTest.iloc[:, 1:]
+    xTrain.columns = colNames
+    xTest.columns = colNames
 
     # Normalize the data:
     xTrain, xTest = normalizeData(xTrain, xTest, normalize, normFunc)
