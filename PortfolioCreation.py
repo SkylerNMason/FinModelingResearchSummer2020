@@ -1,11 +1,9 @@
-from DataGeneration import *
 import numpy as np
 import cvxopt as opt
 from cvxopt import blas, solvers
 import pandas as pd
 import matplotlib.pyplot as plt
-from ReturnForecasting import *
-from CovarianceForecasting import *
+from GlobalVariables import *
 
 # Ideas: Create a portfolio that equally invests in all assets that
 # an svm algo says will have a positive return
@@ -53,38 +51,42 @@ def createEfficientFrontier(dfDict):
     return opSpace
 
 
-def globalMinVarPortfolio(returnVec, annualize = 1, S = None):
+def globalMinVarPortfolio(returnVec, S = None):
     # Creates a portfolio with the minimum possible
     # variance (not highest sharpe necessarily)
     solvers.options['show_progress'] = False
-    n = len(returnVec) # Gets how many assets we are dealing with
+    n = len(returnVec)  # Gets how many assets we are dealing with
     returnVec = np.asmatrix(returnVec)
     # Convert to cvxopt matrices:
     if S is None:
         S = opt.matrix(np.cov(returnVec)) # Covariance matrix
     # Create constraint matrices:
-    G = -opt.matrix(np.eye(n)) # Negative nxn identity matrix
-    h = opt.matrix(0.0, (n, 1)) # nx1 vector with all zero entries
+    G = -opt.matrix(np.eye(n))  # Negative nxn identity matrix
+    h = opt.matrix(0.0, (n, 1))  # nx1 vector with all zero entries
     hp = opt.matrix(np.zeros((n, 1)))
-    A = opt.matrix(1.0, (1,n)) # 1xn vector with all one entries
-    b = opt.matrix(1.0) # 1x1 with 1.0 as its entry
+    A = opt.matrix(1.0, (1,n))  # 1xn vector with all one entries
+    b = opt.matrix(1.0)  # 1x1 with 1.0 as its entry
 
     sol = solvers.qp(S, h, G, hp, A, b)
     wGMV = sol['x']
-    risk = np.sqrt(blas.dot(wGMV, S * wGMV)) * np.sqrt(annualize)
+    risk = np.sqrt(blas.dot(wGMV, S * wGMV))
 
     returnVec = opt.matrix(np.mean(returnVec, axis=1))
-    rtn = blas.dot(wGMV.T, returnVec) * annualize
+    rtn = blas.dot(wGMV.T, returnVec)
     return wGMV, risk, rtn
 
-def oneN(returnVec, annualize = 1, S = None):
+def oneN(returnVec, S = None):
     # Creates the naive 1/N portfolio where each asset
     # has an equal weighting in the portfolio
+    returnVec = np.asmatrix(returnVec)
     if S is None:
         S = opt.matrix(np.cov(returnVec))
-    wgt = 1/len(returnVec)
-    risk = np.sqrt(blas.dot(wgt, S * wgt)) * np.sqrt(annualize)
-    rtn = returnVec.mean() * annualize
+    n = len(returnVec)
+    wgt = opt.matrix(1/n, (n, 1))
+    risk = np.sqrt(blas.dot(wgt, S * wgt))
+
+    returnVec = opt.matrix(np.mean(returnVec, axis=1))
+    rtn = blas.dot(wgt.T, returnVec)
     return wgt, risk, rtn
 
 # Check out
@@ -140,7 +142,7 @@ plt.show()
 
 
 
-def sharpePortfolio(returnVec):
+def sharpePortfolio(returnVec, S=None):
     # Creates a portfolio with the highest sharpe ratio
     # in an efficient frontier (might be wrong?)
     solvers.options['show_progress'] = False
@@ -149,7 +151,8 @@ def sharpePortfolio(returnVec):
     N = 100
     mus = [10**(5.0 * t / N - 1.0) for t in range(N)]
     # Convert to cvxopt matrices:
-    S = opt.matrix(np.cov(returnVec)) # Covariance matrix
+    if S is None:
+        S = opt.matrix(np.cov(returnVec)) # Covariance matrix
     pbar = opt.matrix(np.mean(returnVec, axis=1)) # Average returns for each asset
     # Create constraint matrices:
     G = -opt.matrix(np.eye(n)) # Negative nxn identity matrix
@@ -167,7 +170,14 @@ def sharpePortfolio(returnVec):
     x1 = np.sqrt(abs(m1[2]/m1[0]))
     # Calculate the optimal portfolio
     wt = solvers.qp(opt.matrix(x1 * S), -pbar, G, h, A, b)['x']
-    return np.asarray(wt), returnVec, riskVec
+    return np.asarray(wt),riskVec, returnVec
+
+def localTest():
+    returnVec1 = generateRandomReturns(2, 100)
+    returnVec1 = [[.5, .5, .5], [0, 0, 0]]
+    print(returnVec1)
+    weights, risks, returns = globalMinVarPortfolio(returnVec1)
+    return list(weights), risks, returns
 
 '''
 weights, returns, risks = globalMinVarPortfolio(returnVec1)
@@ -179,6 +189,7 @@ plt.plot(risks, returns, 'y-o')
 plt.show()
 print(weights)
 '''
+
 
 # Below is burtons code:
 

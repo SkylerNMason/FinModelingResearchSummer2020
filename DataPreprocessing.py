@@ -6,8 +6,7 @@ import numpy as np
 from featuretools.primitives import make_trans_primitive
 from featuretools.variable_types import Numeric
 import os
-
-debug = True
+from GlobalVariables import *
 
 # Clean the Data:
 
@@ -142,8 +141,6 @@ def prepData(df, testSize, normalize, randomState, normFunc, primitives,
     if debug: print("Prepping")
     # Parse and clean:
     xTrain, xTest, yTrain, yTest = cleanData(df, testSize, randomState)
-
-    # TODO make modifyData also save the new dataset
 
     # Perform feature engineering:
     if primitives is not None:

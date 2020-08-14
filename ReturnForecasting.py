@@ -16,11 +16,7 @@ import sklearn.linear_model as sklm
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import sklearn
 import statsmodels.api as sm
-
-stdTestingRange = np.logspace(-3, 2, 100)
-
-debug = True
-pd.set_option('display.max_rows', None)
+from GlobalVariables import *
 
 # Helper functions:
 
@@ -115,15 +111,15 @@ def mulLinReg(dfDict, **excess):
         # Train the model:
         model = sklm.LinearRegression()
         fitModel = model.fit(xTrain, yTrain.values.ravel())
-        models[asset] = fitModel
+        models[asset] = [fitModel, fitModel.predict(xTest)]
 
         # Save the model:
         information = {"asset": asset.rsplit(".", 1)[0],
                        "testSize": excess["testSize"],
                        "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset]).__name__)}
+                       "model": str(type(models[asset][0]).__name__)}
         filename = nameSave(**information)
-        saveModel(models[asset], filename)
+        saveModel(models[asset][0], filename)
         '''
         # From statsmodels, use to get detailed stats:
         xTrain = sm.add_constant(xTrain)
@@ -151,7 +147,7 @@ def ridgeReg(dfDict, alpha = -1, minRsqrDifScorer = False,
         if alpha is not -1:
             model = sklm.Ridge(alpha=alpha)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
-            models[asset] = fitModel
+            models[asset] = [fitModel, fitModel.predict(xTest)]
 
         elif minRsqrDifScorer is True: # Use our own scoring method
             bestScore, bestModel = None, None
@@ -160,22 +156,22 @@ def ridgeReg(dfDict, alpha = -1, minRsqrDifScorer = False,
                 fitModel = model.fit(xTrain, yTrain.values.ravel())
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                   yTrain, yTest, bestScore, bestModel)
-            models[asset] = bestModel
+            models[asset] = [bestModel, bestModel.predict(xTest)]
 
 
         else: # Perform Leave-One-Out cross validation
               # to find optimal alpha value
             model = sklm.RidgeCV(alphas = alphaRange)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
-            models[asset] = fitModel
+            models[asset] = [fitModel, fitModel.predict(xTest)]
 
         # Save the model:
         information = {"asset": asset.rsplit(".", 1)[0],
                        "testSize": excess["testSize"],
                        "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset]).__name__)}
+                       "model": str(type(models[asset][0]).__name__)}
         filename = nameSave(**information)
-        saveModel(models[asset], filename)
+        saveModel(models[asset][0], filename)
 
     return models
 
@@ -197,7 +193,7 @@ def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
             if debug: print("heyo-1")
             model = sklm.Lasso(alpha=alpha)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
-            models[asset] = fitModel
+            models[asset] = [fitModel, fitModel.predict(xTest)]
 
         elif minRsqrDifScorer is True: # Use our own scoring method
             bestScore, bestModel = None, None
@@ -207,23 +203,23 @@ def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
                 fitModel = model.fit(xTrain, yTrain.values.ravel())
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                   yTrain, yTest, bestScore, bestModel)
-            models[asset] = bestModel
+            models[asset] = [bestModel, bestModel.predict(xTest)]
 
         else: # Perform 10-fold cross validation to find optimal alpha value
             if debug: print("heyo4")
             model = sklm.LassoCV(cv = 10, alphas=alphaRange)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
-            print(pd.DataFrame(np.array(list(zip(fitModel.coef_, xTrain.columns))).reshape(-1,2)))
-            models[asset] = fitModel
+            if debug: print(pd.DataFrame(np.array(list(zip(fitModel.coef_, xTrain.columns))).reshape(-1,2)))
+            models[asset] = [fitModel, fitModel.predict(xTest)]
 
         # Save the model:
         if debug: print("heyo5")
         information = {"asset": asset.rsplit(".", 1)[0],
                        "testSize": excess["testSize"],
                        "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset]).__name__)}
+                       "model": str(type(models[asset][0]).__name__)}
         filename = nameSave(**information)
-        saveModel(models[asset], filename)
+        saveModel(models[asset][0], filename)
 
     return models
 
@@ -243,7 +239,7 @@ def elasticNet(dfDict, alpha=-1, minRsqrDifScorer=False,
         if alpha is not -1: # Use user inputted alpha
             model = sklm.Lasso(alpha=alpha)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
-            models[asset] = fitModel
+            models[asset] = [fitModel, fitModel.predict(xTest)]
 
         elif minRsqrDifScorer is True: # Use our own scoring method
             bestScore, bestModel = None, None
@@ -254,21 +250,21 @@ def elasticNet(dfDict, alpha=-1, minRsqrDifScorer=False,
                     fitModel = model.fit(xTrain, yTrain.values.ravel())
                     bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
                                                       yTrain, yTest, bestScore, bestModel)
-            models[asset] = bestModel
+            models[asset] = [bestModel, bestModel.predict(xTest)]
 
         else: # Perform 10-fold cross validation to find optimal alpha value
             model = sklm.ElasticNetCV(cv = 10, alphas=alphaRange,
                                       l1_ratio=lambaRatio)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
-            models[asset] = fitModel
+            models[asset] = [fitModel, fitModel.predict(xTest)]
 
         # Save the model:
         information = {"asset": asset.rsplit(".", 1)[0],
                        "testSize": excess["testSize"],
                        "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset]).__name__)}
+                       "model": str(type(models[asset][0]).__name__)}
         filename = nameSave(**information)
-        saveModel(models[asset], filename)
+        saveModel(models[asset][0], filename)
 
     return models
 
@@ -276,7 +272,7 @@ def elasticNet(dfDict, alpha=-1, minRsqrDifScorer=False,
 
 
 
-# File Testing:
+'''# File Testing:
 
 def updateDict(**kwargs):
     fileLocation = kwargs["fileLocation"]
@@ -293,8 +289,8 @@ def updateDict(**kwargs):
 
 def defaultModelKwargs(randomState):
     # fileLocation = input("File or folder path: ")
-    # timeFormat = input("Date format of your dates ("%Y%m%d", etc): ")
-    fileLocation = "E:\ProgrammingProjects\FinModelingResearchSummer2020\Data"
+    # timeFormat = input("Date format of your dates ("%Y%m%d", etc): ")= "E:\ProgrammingProjects\FinModelingResearchSummer2020\Data"
+    fileLocation = "D:\\Users\\dzjre\PycharmProjects\FinModelingResearchSummer2020\Data"
     timeFormat = None # Defaultly uses inferred time,
     # Make something like %Y%m to not use this feature
     testSize = .2
@@ -308,7 +304,7 @@ def defaultModelKwargs(randomState):
               "timeFormat": timeFormat, "testSize": .2, "alpha": -1,
               "minRsqrDifScorer": False, "randomState": None,
               "alphaRange": stdTestingRange, "normalize": True,
-              "normFunc": StandardScaler, "primitives": None,
+              "normFunc": StandardScaler, "primitives": primitives,
               "lambdaRatio": np.logspace(-1,0,25)}
     return kwargs
 
@@ -350,3 +346,4 @@ def test(randomState=None):
     return
 
 test(1)
+'''

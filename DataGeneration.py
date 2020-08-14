@@ -2,9 +2,7 @@ from DataPreprocessing import *
 import pandas as pd
 import os
 from joblib import dump, load
-
-
-debug = True
+from GlobalVariables import *
 
 def addDfToDict(dfDict, fileLocation, fileType, timeFormat, testSize,
                 normalize, randomState, normFunc, primitives):
