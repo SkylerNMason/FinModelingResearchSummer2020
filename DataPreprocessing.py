@@ -10,6 +10,24 @@ from GlobalVariables import *
 
 # Clean the Data:
 
+
+def splitData(df, testSize, randomState):
+    # Parse the data:
+    x = df.iloc[:, 1:]
+    y = df.iloc[:, :1]
+
+    # Split the data:
+    if testSize is not 0:
+        xTrain, xTest, yTrain, yTest = train_test_split(x, y,
+                                                        test_size=testSize,
+                                                        random_state=randomState,
+                                                        shuffle=False)
+    else:
+        xTrain, xTest = x, 0
+        yTrain, yTest = y, 0
+    return xTrain, xTest, yTrain, yTest
+
+
 def cleanData(df=None, testSize=-1, randomState=None, xTrain=None, xTest=None):
     # To clean just a single dataframe (like just the set of
     # independent vars) use testSize=0 and bothXandY=False,
@@ -30,18 +48,9 @@ def cleanData(df=None, testSize=-1, randomState=None, xTrain=None, xTest=None):
             if df[col].isnull().sum() > n*naTolerance:
                 df.drop(col, axis=1, inplace=True)'''
 
-        # Parse the data:
-        x = df.iloc[:, 1:]
-        y = df.iloc[:, :1]
-
         # Split the data:
-        if testSize is not 0:
-            xTrain, xTest, yTrain, yTest = train_test_split(x, y, test_size=testSize,
-                                                            random_state=randomState,
-                                                            shuffle=False)
-        else:
-            xTrain, xTest = x, 0
-            yTrain, yTest = y, 0
+        xTrain, xTest, yTrain, yTest = splitData(df, testSize, randomState)
+
     else: # We are importing xTrain and xTest
         xTrain.replace([np.inf, -np.inf],
                        value = np.nan, inplace=True)
@@ -139,6 +148,7 @@ def prepData(df, testSize, normalize, randomState, normFunc, primitives,
     # Takes a dataframe and splits it into independent/dependent varialbes
     # plus what the test and training set will be (randomly assigned)
     if debug: print("Prepping")
+
     # Parse and clean:
     xTrain, xTest, yTrain, yTest = cleanData(df, testSize, randomState)
 
@@ -147,6 +157,7 @@ def prepData(df, testSize, normalize, randomState, normFunc, primitives,
         xTrain, xTest = modifyDataset(xTrain, xTest, randomState, primitives)
         saveData(assetName, testSize, xTrain=xTrain, xTest=xTest, yTrain=yTrain,
              yTest=yTest)
+
     colNames = list(xTrain.columns)[1:]
     xTrain = xTrain.iloc[:,1:]
     xTest = xTest.iloc[:, 1:]
@@ -251,6 +262,37 @@ def defineFedPrims():
     FirstDifPct = make_trans_primitive(function=firstDifPct, input_types=[Numeric],
                                        return_type=Numeric)
     prims.append(FirstDifPct)
+
+    def twelveLagDifLn(column):
+        # A 12 period lagged difference of natural logs
+        results = []
+        for i in range(len(column)):
+            if i < 12:
+                results.append(np.nan)
+            else:
+                change = np.log(column[i])-np.log(column[i-12])
+                results.append(change)
+        return results
+    TwelveLagDifLn = make_trans_primitive(function=twelveLagDifLn,
+                                          input_types=[Numeric],
+                                          return_type=Numeric)
+    prims.append(TwelveLagDifLn)
+
+    def threeLagDifLn(column):
+        # A 3 period lagged difference of natural logs
+        results = []
+        for i in range(len(column)):
+            if i < 3:
+                results.append(np.nan)
+            else:
+                change = np.log(column[i])-np.log(column[i-3])
+                results.append(change)
+        return results
+    ThreeLagDifLn = make_trans_primitive(function=threeLagDifLn,
+                                         input_types=[Numeric],
+                                         return_type=Numeric)
+    prims.append(ThreeLagDifLn)
+
 
     return prims
 

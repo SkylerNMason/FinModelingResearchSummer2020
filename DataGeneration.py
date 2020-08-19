@@ -5,18 +5,18 @@ from joblib import dump, load
 from GlobalVariables import *
 
 def addDfToDict(dfDict, fileLocation, fileType, timeFormat, testSize,
-                normalize, randomState, normFunc, primitives):
+                normalize, randomState, normFunc, primitives, **excess):
     # Adds 4 dataframes to the dictionary as a list representing
     # xTrain, xTest, yTrain, and yTest respectively
     assetName = fileLocation.rsplit(os.sep, 1)[1].rsplit(".", 1)[0]
     data = buildDf(fileLocation, fileType, timeFormat, testSize, normalize,
-                   randomState, normFunc, primitives, assetName)
-    if not isinstance(data, int): # Used as a null input coming from a broken file - ignored
+                   randomState, normFunc, primitives, assetName, **excess)
+    if not isinstance(data, int): # Used as a null check coming from a broken file, aka ignore it
         dfDict[assetName] = data
     return
 
 def generateDfDict(fileLocation, timeFormat, testSize, normalize,
-                   randomState, normFunc, primitives):
+                   randomState, normFunc, primitives, **excess):
     # Creates dataframes (matrices) from inputted files which are then put into
     # a dictionary to be retrieved later.
     # The dictionary, dfDict, is setup such that the key is the filename.
@@ -65,7 +65,8 @@ def generateDfDict(fileLocation, timeFormat, testSize, normalize,
 
 
 def buildDf(fileLocation, fileType, timeFormat, testSize, normalize,
-            randomState, normFunc, primitives, assetName):
+            randomState, normFunc, primitives, assetName,
+            **excess):
     # Takes a csv/xlsx file at fileLocation and builds a matrix out of
     # the given variables.
     # TODO: Make a better description. Involve what the csv file should look like.
@@ -88,9 +89,10 @@ def buildDf(fileLocation, fileType, timeFormat, testSize, normalize,
             df["Date"] = pd.to_datetime(df["Date"], infer_datetime_format=True)
         else:
             df["Date"] = pd.to_datetime(df["Date"], format=timeFormat)
+
         xTrain, xTest, yTrain, yTest = prepData(df, testSize, normalize,
-                                                randomState, normFunc,
-                                                primitives, assetName)
+                                                randomState, normFunc, primitives,
+                                                assetName)
 
         return [xTrain, xTest, yTrain, yTest]
 

@@ -13,12 +13,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.linear_model as sklm
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import sklearn
 import statsmodels.api as sm
 from GlobalVariables import *
 
 # Helper functions:
+
 
 def testModels(testSize, models, dfDict):
     # Predicts and prints the results for testing a model
@@ -31,6 +31,7 @@ def testModels(testSize, models, dfDict):
             yPred = models[asset].predict(xTrain)
             printResults(models[asset], asset, xTrain, 0, yTrain, yTrain, yPred)
     return
+
 
 def printResults(model, asset, xTrain, xTest, yTrain, yTest, yPred):
     # Prints out a bunch of useful statistics to analyze the
@@ -83,9 +84,9 @@ def minRsqrDif(model, xTrain, xTest, yTrain, yTest,
     trainRsqr = model.score(xTrain, yTrain)
     testRsqr = model.score(xTest, yTest)
     rsqrDif = abs(trainRsqr - testRsqr)/abs(testRsqr)
-    #print(abs(trainRsqr - testRsqr), rsqrDif, testRsqr)
+    #print(bestScore, rsqrDif, trainRsqr, testRsqr)
     if bestScore is None or (rsqrDif <= bestScore):
-        #print(rsqrDif, testAdjRsqr, "hereeeee")
+        #print(testRsqr, "hereeeee")
         return rsqrDif, model
     return bestScore, bestModel
 
@@ -211,6 +212,10 @@ def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
             fitModel = model.fit(xTrain, yTrain.values.ravel())
             if debug: print(pd.DataFrame(np.array(list(zip(fitModel.coef_, xTrain.columns))).reshape(-1,2)))
             models[asset] = [fitModel, fitModel.predict(xTest)]
+
+        if debug:
+            printResults(models[asset][0], asset, xTrain, xTest, yTrain, yTest,
+                         models[asset][1])
 
         # Save the model:
         if debug: print("heyo5")
