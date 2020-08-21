@@ -123,6 +123,7 @@ def loadModels(fileLocation):
             if os.path.isfile(fileLocation + os.sep + file) and file.count(".") is 0:
                 models[file.split(",", 1)[0]] = load(fileLocation + os.sep + file)
 
-    '''path = "Data" + os.sep + "SavedModels" + os.sep + str(filename)
-    load(path)'''
-    return models
+    if len(models) is 0:
+        return None
+    else:
+        return models

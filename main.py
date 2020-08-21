@@ -15,6 +15,7 @@ statsmodels
 arch
 featuretools
 openpyxl
+fredapi
 """
 
 from Testing import *
@@ -26,7 +27,7 @@ from sklearn.exceptions import ConvergenceWarning
 
 
 @ignore_warnings(category=ConvergenceWarning)
-def main(randomState=None):
+def main():
     # TODO:
     #   Process:
     #       Forecast mean, variance, cov to build risky portfolio
@@ -35,39 +36,36 @@ def main(randomState=None):
     #       Plug into utility function and output
 
     # Default model kwargs:
-    kwargs = defaultModelKwargs(randomState)
+    kwargs = defaultModelKwargs()
 
     modify = True
     if modify:
         # Modified testing kwargs:
-        kwargs.update({'randomState': randomState, 'primitives': None,
-                       "minRsqrDifScorer": False})
+        kwargs.update({'primitives': None, "minRsqrDifScorer": False,
+                       "periodsPerAnnum": 12})
     kwargs = updateDict(**kwargs)
 
-
-    print("\n\n\n\n\n\nStage 1 Done\n\n\n\n\n\n")
-
-    realizedReturns = kwargs["realizedReturns"]
+    annualize = kwargs["periodsPerAnnum"]
+    print("Data Imported\n")
 
     # Baseline performance with one/n portfolio:
-    basePerf = [*basePerfGen(**kwargs)]  # [Std. dev., return]
-    print(basePerf)
+    basePerfRisk, basePerfRtn = basePerfGen(**kwargs)  # [Std. dev., return]
+    basePerfRisk, basePerfRtn = basePerfRisk*annualize**.5, \
+                                basePerfRtn*annualize
 
-
-    returnVec = []
-    # stdDevPreds = garchModel(**kwargs)
-
+    # Note: risk premium is calculated based on averages and so
+    # results in a very slightly different calculation
+    sharpe = (basePerfRtn - kwargs["rf"]) / basePerfRisk
     testModels(**kwargs)
 
+    result = "Baseline: {:.3f} {:.3f} {:.3f}".format(round(basePerfRisk, 3),
+                                                     round(basePerfRtn, 3),
+                                                     round(sharpe, 3))
+    print(result.rjust(outputRJust))
+    print("Rf: {:.5f}".format(kwargs["rf"]).rjust(outputRJust))
 
-    # Needs a dataframe with return vectors for each asset,
-    # and optionally a covariance matrix
-    # print(globalMinVarPortfolio(np.asarray(returnVec), S))
 
-    # returnData = returnData.T.to_numpy()
-    # print(globalMinVarPortfolio(returnData))
-
-    print("Done")
+    print("\n\nDone")
 
     return 0
 

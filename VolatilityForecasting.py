@@ -28,6 +28,17 @@ def historicalCov(dfDict):
     S = opt.matrix(np.cov(returnVec))
     return S
 
+def historicalCor(dfDict):
+    # Returns the historical correlation matrix based on yTrain
+    returnVec = []
+    for asset in dfDict:
+        xTrain, xTest, yTrain, yTest = dfDict[asset]
+        returnVec.append(list(yTrain["Returns"].tolist()))
+    c =pd.DataFrame(returnVec).T
+    c.columns = (list(dfDict))
+    c = c.corr()
+    return c
+
 def createCovWER():
     return
 
@@ -58,28 +69,35 @@ def garchModel(dfDict, testSize, **excess):
     for asset in dfDict:
         xTrain, xTest, yTrain, yTest = dfDict[asset]
         returns = yTrain.append(yTest)
-        testLen = int(len(returns)*testSize)
+        returns = returns*100  # Rescaling for garch model convergence problems
+        testLen = int(len(yTest))
 
-        if graph: plotPACF(np.array(returns)**2)
-        p = int(input("Input p integer:"))
-        q = int(input("Input q integer:"))
+        if graph:
+            plotPACF(np.array(returns)**2)
+        #p = int(input("Input p integer:"))
+        p = 1
+        q = p
+        #q = int(input("Input q integer:"))
 
-        mean = returns.mean()
         vols = []
         rollingPredictions = []
+        # Generate rolling predictions of the next periods std dev.
+        # for each time period:
         for i in range(testLen):
-            train = returns[: -(testLen-i)]
+            knownReturns = returns[: -(testLen-i)]
+            mean = knownReturns.mean()
+            train = knownReturns
             model = arch_model(train, p=p, q=q)
             fitModel = model.fit(disp="off")
             if debug is True and i is 0:
                 print(asset + " model summary for first garch pred:")
                 print(fitModel.summary())
-            pred = fitModel.forecast(horizon=1)
+            pred = fitModel.forecast(horizon=1) # Forecasts variance
             vols.append(np.sqrt((yTest.values[i][0]-mean)**2)) # Maybe wrong?
             rollingPredictions.append(np.sqrt(pred.variance.values[-1,:][0]))
-        #plotData(rollingPredictions, vols[-testLen:])
 
-        if graph: plotData(rollingPredictions, vols, "Rolling Pred Vol & True Vol?" + asset)
+        if graph:
+            plotData(rollingPredictions, vols, "Rolling Pred Vol & True Vol?" + asset)
         garchPreds[asset] = rollingPredictions
 
     return garchPreds

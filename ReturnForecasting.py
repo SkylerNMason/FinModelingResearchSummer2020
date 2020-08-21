@@ -114,13 +114,6 @@ def mulLinReg(dfDict, **excess):
         fitModel = model.fit(xTrain, yTrain.values.ravel())
         models[asset] = [fitModel, fitModel.predict(xTest)]
 
-        # Save the model:
-        information = {"asset": asset.rsplit(".", 1)[0],
-                       "testSize": excess["testSize"],
-                       "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset][0]).__name__)}
-        filename = nameSave(**information)
-        saveModel(models[asset][0], filename)
         '''
         # From statsmodels, use to get detailed stats:
         xTrain = sm.add_constant(xTrain)
@@ -129,6 +122,10 @@ def mulLinReg(dfDict, **excess):
         predictions = model2.predict(xTest)
         print(model2.summary())
         '''
+
+    # Save the models:
+    filename = str("linModels") + ", " + str(len(dfDict)) + " assets"
+    saveModel(models, filename)
 
     return models
 
@@ -166,13 +163,9 @@ def ridgeReg(dfDict, alpha = -1, minRsqrDifScorer = False,
             fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = [fitModel, fitModel.predict(xTest)]
 
-        # Save the model:
-        information = {"asset": asset.rsplit(".", 1)[0],
-                       "testSize": excess["testSize"],
-                       "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset][0]).__name__)}
-        filename = nameSave(**information)
-        saveModel(models[asset][0], filename)
+    # Save the models:
+    filename = str("ridgeModels") + ", " + str(len(dfDict)) + " assets"
+    saveModel(models, filename)
 
     return models
 
@@ -217,14 +210,9 @@ def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
             printResults(models[asset][0], asset, xTrain, xTest, yTrain, yTest,
                          models[asset][1])
 
-        # Save the model:
-        if debug: print("heyo5")
-        information = {"asset": asset.rsplit(".", 1)[0],
-                       "testSize": excess["testSize"],
-                       "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset][0]).__name__)}
-        filename = nameSave(**information)
-        saveModel(models[asset][0], filename)
+    # Save the models:
+    filename = str("lassoModels") + ", " + str(len(dfDict)) + " assets"
+    saveModel(models, filename)
 
     return models
 
@@ -263,13 +251,9 @@ def elasticNet(dfDict, alpha=-1, minRsqrDifScorer=False,
             fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = [fitModel, fitModel.predict(xTest)]
 
-        # Save the model:
-        information = {"asset": asset.rsplit(".", 1)[0],
-                       "testSize": excess["testSize"],
-                       "numFeat": len(xTrain.columns),
-                       "model": str(type(models[asset][0]).__name__)}
-        filename = nameSave(**information)
-        saveModel(models[asset][0], filename)
+    # Save the models:
+    filename = str("elasticModels") + ", " + str(len(dfDict)) + " assets"
+    saveModel(models, filename)
 
     return models
 

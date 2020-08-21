@@ -68,12 +68,12 @@ def globalMinVarPortfolio(returnVec, S = None):
     b = opt.matrix(1.0)  # 1x1 with 1.0 as its entry
 
     sol = solvers.qp(S, h, G, hp, A, b)
-    wGMV = sol['x']
-    risk = np.sqrt(blas.dot(wGMV, S * wGMV))
+    wgt = sol['x']
+    risk = np.sqrt(blas.dot(wgt, S * wgt))
 
     returnVec = opt.matrix(np.mean(returnVec, axis=1))
-    rtn = blas.dot(wGMV.T, returnVec)
-    return wGMV, risk, rtn
+    rtn = blas.dot(wgt.T, returnVec)
+    return wgt, risk, rtn
 
 def oneN(returnVec, S = None):
     # Creates the naive 1/N portfolio where each asset
@@ -84,6 +84,7 @@ def oneN(returnVec, S = None):
     n = len(returnVec)
     wgt = opt.matrix(1/n, (n, 1))
     risk = np.sqrt(blas.dot(wgt, S * wgt))
+
 
     returnVec = opt.matrix(np.mean(returnVec, axis=1))
     rtn = blas.dot(wgt.T, returnVec)
@@ -142,6 +143,7 @@ plt.show()
 
 
 
+
 def sharpePortfolio(returnVec, S=None):
     # Creates a portfolio with the highest sharpe ratio
     # in an efficient frontier (might be wrong?)
@@ -169,8 +171,11 @@ def sharpePortfolio(returnVec, S=None):
     m1 = np.polyfit(returnVec, riskVec, 2)
     x1 = np.sqrt(abs(m1[2]/m1[0]))
     # Calculate the optimal portfolio
-    wt = solvers.qp(opt.matrix(x1 * S), -pbar, G, h, A, b)['x']
-    return np.asarray(wt),riskVec, returnVec
+    sol = solvers.qp(opt.matrix(x1 * S), -pbar, G, h, A, b)
+    wgt = sol['x']
+
+    return wgt, riskVec, returnVec
+
 
 def localTest():
     returnVec1 = generateRandomReturns(2, 100)

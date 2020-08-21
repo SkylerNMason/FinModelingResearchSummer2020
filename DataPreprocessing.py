@@ -156,17 +156,24 @@ def prepData(df, testSize, normalize, randomState, normFunc, primitives,
     if primitives is not None:
         xTrain, xTest = modifyDataset(xTrain, xTest, randomState, primitives)
         saveData(assetName, testSize, xTrain=xTrain, xTest=xTest, yTrain=yTrain,
-             yTest=yTest)
+                 yTest=yTest)
 
-    colNames = list(xTrain.columns)[1:]
-    xTrain = xTrain.iloc[:,1:]
+    xTrainDates = xTrain["Date"]
+    xTestDates = xTest["Date"]
+    xTrain.set_index("Date", drop=True, inplace=True)
+    xTest.set_index("Date", drop=True, inplace=True)
+
+    '''colNames = list(xTrain.columns)[1:]
+    xTrain = xTrain.iloc[:, 1:]         # Delete this section?
     xTest = xTest.iloc[:, 1:]
     xTrain.columns = colNames
-    xTest.columns = colNames
+    xTest.columns = colNames'''
 
     # Normalize the data:
     xTrain, xTest = normalizeData(xTrain, xTest, normalize, normFunc)
     if debug: print("Finished prepping")
+    xTrain.set_index(xTrainDates, inplace=True)
+    xTest.set_index(xTestDates, inplace=True)
     return xTrain, xTest, yTrain, yTest
 
 
