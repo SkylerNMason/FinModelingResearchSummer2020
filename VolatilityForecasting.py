@@ -8,6 +8,9 @@ from arch import arch_model
 from GlobalVariables import *
 import cvxopt as opt
 
+
+# Idea: last 3 years or something rolling historical cov
+
 def createSD(dfDict):
     # Takes a dateframe dict with daily returns and returns a
     # dataframe with annual standard deviations
@@ -18,31 +21,50 @@ def createSD(dfDict):
 
     return sdDF.std()*np.sqrt(252)
 
-def historicalCov(dfDict):
+def historicalCov(dfDict, unknownLen):
     # Returns the historical covariance matrix based on yTrain
+    # Can use the unkownLen for a rolling window
     # yTrains must be the same size
     returnVec = []
     for asset in dfDict:
         xTrain, xTest, yTrain, yTest = dfDict[asset]
-        returnVec.append(list(yTrain["Returns"].tolist()))
-    S = opt.matrix(np.cov(returnVec))
+        returns = yTrain.append(yTest, ignore_index=True)
+        returns = list(returns["Returns"].tolist())
+        returnVec.append(returns[:-unknownLen])
+    S = np.cov(returnVec)
     return S
 
-def historicalCor(dfDict):
+
+def stdDevsToCov(numAssets, c, period, stdDevs):
+    # Uses standard deviations and correlations to create a covariance matrix
+    n = numAssets
+    S = np.zeros(shape=(n, n))
+    # Fills S left to right, top to bottom:
+    for row in range(n):
+        x = stdDevs.iloc[period, row]
+        for col in range(n):
+            y = stdDevs.iloc[period, col]
+            corr = c.iloc[row, col]
+            S[row][col] = corr*x*y
+    return S
+
+
+def historicalCor(dfDict, unknownLen):
     # Returns the historical correlation matrix based on yTrain
+    # Can use the unkownLen for a rolling window
     returnVec = []
     for asset in dfDict:
         xTrain, xTest, yTrain, yTest = dfDict[asset]
-        returnVec.append(list(yTrain["Returns"].tolist()))
+        returns = yTrain.append(yTest, ignore_index=True)
+        returns = list(returns["Returns"].tolist())
+        returnVec.append(returns[:-unknownLen])
     c =pd.DataFrame(returnVec).T
     c.columns = (list(dfDict))
     c = c.corr()
     return c
 
-def createCovWER():
-    return
 
-def garchModel(dfDict, testSize, **excess):
+def garchModel(dfDict, **excess):
 
 
     '''#For testing with gauss data:
@@ -93,8 +115,9 @@ def garchModel(dfDict, testSize, **excess):
                 print(asset + " model summary for first garch pred:")
                 print(fitModel.summary())
             pred = fitModel.forecast(horizon=1) # Forecasts variance
-            vols.append(np.sqrt((yTest.values[i][0]-mean)**2)) # Maybe wrong?
-            rollingPredictions.append(np.sqrt(pred.variance.values[-1,:][0]))
+            vols.append(np.sqrt((yTest.values[i][0]-mean)**2))  # Maybe wrong?
+            rollingPredictions.append(np.sqrt(pred.variance.values[-1, :]
+                                              [0])/100)
 
         if graph:
             plotData(rollingPredictions, vols, "Rolling Pred Vol & True Vol?" + asset)

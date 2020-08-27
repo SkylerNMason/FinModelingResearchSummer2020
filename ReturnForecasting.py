@@ -16,30 +16,21 @@ import sklearn.linear_model as sklm
 import sklearn
 import statsmodels.api as sm
 from GlobalVariables import *
+from Plotting import *
 
 # Helper functions:
 
 
-def testModels(testSize, models, dfDict):
-    # Predicts and prints the results for testing a model
-    for asset in dfDict:
-        xTrain, xTest, yTrain, yTest = dfDict[asset]
-        if testSize is not 0:
-            yPred = models[asset].predict(xTest)
-            printResults(models[asset], asset, xTrain, xTest, yTrain, yTest, yPred)
-        else:
-            yPred = models[asset].predict(xTrain)
-            printResults(models[asset], asset, xTrain, 0, yTrain, yTrain, yPred)
-    return
-
-
-def printResults(model, asset, xTrain, xTest, yTrain, yTest, yPred):
+def printRtnResults(model, xTrain, xTest, yTrain, yTest, yPred):
     # Prints out a bunch of useful statistics to analyze the
     # effectiveness of the model
+    yTest.reset_index(drop=True, inplace=True)
 
     # Print out results:
-    print("!Results for:", asset,"\n" , model, "\n")
-    print("Coef:", model.coef_)
+    print("Coef:")
+    coefs = pd.DataFrame(
+            np.array(list(zip(model.coef_, xTrain.columns))).reshape(-1, 2)).T
+    print(coefs.to_string(index=False))
     try:
         print("Alpha:", model.alpha_)
     except:
@@ -65,12 +56,12 @@ def printResults(model, asset, xTrain, xTest, yTrain, yTest, yPred):
         yTest, yPred))
     print('Root Mean Squared Error:', np.sqrt(sklearn.metrics.mean_squared_error(
         yTest, yPred)))
-    print("")
     trainRsqr = model.score(xTrain, yTrain)
     print("Train Score:", trainRsqr)
     if xTest is not 0:
         testRsqr = model.score(xTest, yTest)
         print("Test Score:", testRsqr)
+    #plotData(yPred, yTest, "yPred vs yTest")
     print("")
     return
 
@@ -124,7 +115,8 @@ def mulLinReg(dfDict, **excess):
         '''
 
     # Save the models:
-    filename = str("linModels") + ", " + str(len(dfDict)) + " assets"
+    filename = str("linModels") + "MinRsqrDif" + str(minRsqrDifScorer)\
+               + ", " + str(len(dfDict)) + " Assets"
     saveModel(models, filename)
 
     return models
@@ -153,7 +145,8 @@ def ridgeReg(dfDict, alpha = -1, minRsqrDifScorer = False,
                 model = sklm.RidgeCV(alphas=[a])
                 fitModel = model.fit(xTrain, yTrain.values.ravel())
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
-                                                  yTrain, yTest, bestScore, bestModel)
+                                                  yTrain, yTest, bestScore,
+                                                  bestModel)
             models[asset] = [bestModel, bestModel.predict(xTest)]
 
 
@@ -164,7 +157,8 @@ def ridgeReg(dfDict, alpha = -1, minRsqrDifScorer = False,
             models[asset] = [fitModel, fitModel.predict(xTest)]
 
     # Save the models:
-    filename = str("ridgeModels") + ", " + str(len(dfDict)) + " assets"
+    filename = str("ridgeModels") + "MinRsqrDif" + str(minRsqrDifScorer)\
+               + ", " + str(len(dfDict)) + " Assets"
     saveModel(models, filename)
 
     return models
@@ -196,7 +190,8 @@ def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
                 model = sklm.LassoCV(cv = 10, alphas=[a]) # Use Lasso or LassoCV?
                 fitModel = model.fit(xTrain, yTrain.values.ravel())
                 bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
-                                                  yTrain, yTest, bestScore, bestModel)
+                                                  yTrain, yTest, bestScore,
+                                                  bestModel)
             models[asset] = [bestModel, bestModel.predict(xTest)]
 
         else: # Perform 10-fold cross validation to find optimal alpha value
@@ -207,11 +202,15 @@ def lassoReg(dfDict, alpha = -1, minRsqrDifScorer = False,
             models[asset] = [fitModel, fitModel.predict(xTest)]
 
         if debug:
-            printResults(models[asset][0], asset, xTrain, xTest, yTrain, yTest,
-                         models[asset][1])
+            printRtnResults(models[asset][0], xTrain, xTest, yTrain, yTest,
+                            models[asset][1])
+            yTest.reset_index(drop=True, inplace=True)
+            plotData(models[asset][1], yTest, "Pred vs real")
 
     # Save the models:
-    filename = str("lassoModels") + ", " + str(len(dfDict)) + " assets"
+    filename = str("lassoModels") + "MinRsqrDif" + str(minRsqrDifScorer)\
+               + ", " + str(len(dfDict)) + " Assets"
+
     saveModel(models, filename)
 
     return models
@@ -242,17 +241,19 @@ def elasticNet(dfDict, alpha=-1, minRsqrDifScorer=False,
                     model = sklm.ElasticNetCV(cv=10, alphas=[a], l1_ratio=l)
                     fitModel = model.fit(xTrain, yTrain.values.ravel())
                     bestScore, bestModel = minRsqrDif(fitModel, xTrain, xTest,
-                                                      yTrain, yTest, bestScore, bestModel)
+                                                      yTrain, yTest, bestScore,
+                                                      bestModel)
             models[asset] = [bestModel, bestModel.predict(xTest)]
 
-        else: # Perform 10-fold cross validation to find optimal alpha value
+        else:  # Perform 10-fold cross validation to find optimal alpha value
             model = sklm.ElasticNetCV(cv = 10, alphas=alphaRange,
                                       l1_ratio=lambaRatio)
             fitModel = model.fit(xTrain, yTrain.values.ravel())
             models[asset] = [fitModel, fitModel.predict(xTest)]
 
     # Save the models:
-    filename = str("elasticModels") + ", " + str(len(dfDict)) + " assets"
+    filename = str("elasticModels") + "MinRsqrDif" + str(minRsqrDifScorer)\
+               + ", " + str(len(dfDict)) + " Assets"
     saveModel(models, filename)
 
     return models

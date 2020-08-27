@@ -58,14 +58,14 @@ def main():
     sharpe = (basePerfRtn - kwargs["rf"]) / basePerfRisk
     testModels(**kwargs)
 
-    result = "Baseline: {:.3f} {:.3f} {:.3f}".format(round(basePerfRisk, 3),
-                                                     round(basePerfRtn, 3),
-                                                     round(sharpe, 3))
+    result = "Baseline {:.3f} {:.3f} {:.3f}".format(round(basePerfRisk, 3),
+                                                    round(basePerfRtn, 3),
+                                                    round(sharpe, 3))
     print(result.rjust(outputRJust))
     print("Rf: {:.5f}".format(kwargs["rf"]).rjust(outputRJust))
 
 
-    print("\n\nDone")
+    print("\nDone")
 
     return 0
 

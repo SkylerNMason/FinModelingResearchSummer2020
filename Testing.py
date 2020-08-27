@@ -61,36 +61,33 @@ def generateRtnModels(**kwargs):
     # Generates a dictionary of the return forecasting models for testing
     # TODO: Add more models to test with
     models = dict()
-    models["lassoModels"] = lassoReg(**kwargs)
+    fileNameaddition = "MinRsqrDifScorer" + str(kwargs["minRsqrDifScorer"])
+    models["lassoModels"+fileNameaddition] = lassoReg(**kwargs)
+    #models["ridgeModels" + fileNameaddition] = ridgeReg(**kwargs)
+    #models["elasticModels" + fileNameaddition] = elasticNet(**kwargs)
     return models
 
 def generateCovariance(**kwargs):
     # Generates a covariance matrix for each testing time period
-    testingLen = len(kwargs["dfDict"][list(kwargs["dfDict"].keys())[0]][3])
+    testingLen = len(kwargs["dfDict"][list(kwargs["dfDict"].keys())[0]][3])  #Num of testing periods
     sModels = dict()
     n = len(kwargs["dfDict"])
 
     sMatrices = []
-    # Historical covariance:
-    sMatrices.extend([historicalCov(kwargs["dfDict"]) for i in
-                                    range(testingLen)])
-    sModels["hist"] = sMatrices
+    # Rolling historical covariance:
+    ### Assumption: covariance remains constant over time
+    for i in range(testingLen):
+        sMatrices.append(historicalCov(kwargs['dfDict'], testingLen-i))
+    #sModels["hist"] = sMatrices
 
     sMatrices = []
-    # Garch predicted covariance based on historical correlation:
+    # Garch predicted covariance based on a rolling historical correlation:
     ### Assumption: correlation remains constant over time
-    c = historicalCor(kwargs["dfDict"])
     stdDevs = garchModel(**kwargs)
-    for period in range(testingLen):
-        S = np.zeros(shape=(n, n))
-        # Fills S left to right, top to bottom:
-        for row in range(n):
-            x = stdDevs.iloc[period, row]
-            for col in range(n):
-                y = stdDevs.iloc[period, col]
-                corr = c.iloc[row, col]
-                S[row][col] = corr*x*y
-        sMatrices.append(opt.matrix(S))
+    for i in range(testingLen):
+        # Rolling historical correlation:
+        c = historicalCor(kwargs['dfDict'], testingLen-i)
+        sMatrices.append(stdDevsToCov(n, c, i, stdDevs))
     sModels["garch"] = sMatrices
 
     return sModels
@@ -99,27 +96,47 @@ def generateCovariance(**kwargs):
 def generatePortfolios():
     # Defines the portfolio we will be testing over
     portModels = dict()
-    portModels["gmv"] = globalMinVarPortfolio
+    #portModels["gmv"] = globalMinVarPortfolio
     portModels["sharpe"] = sharpePortfolio
+    #portModels["oneNMixedGMV"] = oneNMixedGMV
+    #portModels["oneNMixedSharpe"] = oneNMixedSharpe
+    portModels["sharpe?"] = maxSomething
+    #portModels["weakSharpe"] = weakMaxSharpe
     return portModels
+
+
+def printRtnModels(rtnModels, **kwargs):
+    for modelType in rtnModels:
+        print("\n\n")
+        print("Testing:", modelType, "\n")
+        modelList = rtnModels[modelType]
+        for model in modelList:
+            xTrain, xTest, yTrain, yTest = kwargs["dfDict"][model]
+            print(model + ":")
+            yPred = modelList[model][1]
+            printRtnResults(modelList[model][0], xTrain, xTest,
+                            yTrain, yTest, yPred)
 
 
 def testModels(**kwargs):
     results = dict()
+
     if kwargs["rtnModels"] is None:
-        rtnModels = generateRtnModels(**kwargs)
-    else:  # We are using saved models
-        rtnModels = kwargs["rtnModels"]
-    print("Returns Forecasted\n")
+        kwargs["rtnModels"] = generateRtnModels(**kwargs)
+    rtnModels = kwargs["rtnModels"]
+    # Print individual return model results:
+    printRtnModels(**kwargs)
+
+    print("\nReturns Forecasted\n")
     sModels = generateCovariance(**kwargs)
     print("Covariance Forecasted\n\n\n")
     portModels = generatePortfolios()
 
-    # Iterate through and test each model type one by one
+    # Iterate through and test each model type one by one:
     for modelType in rtnModels:
         modelList = rtnModels[modelType]
         # modelList is a list of models that shares the same settings
-        # are for unique assets
+        # but are for unique assets
         n = len(modelList)  # Number of assets
 
         returnVec = []  # Period based forecasts (ie daily forecasts)
@@ -127,6 +144,7 @@ def testModels(**kwargs):
         for model in modelList:
             preds = list(modelList[model][1])
             returnVec.append(preds)
+
 
         testingLen = len(preds)
         # Iterate through and test each covariance forecast one by one
@@ -137,15 +155,9 @@ def testModels(**kwargs):
             for portType in portModels:
                 portFunc = portModels[portType]
 
-                weights = []  # Period based weights (ie daily weights)
-                # Generate weights for each time period:
-                for i in range(testingLen):
-                    predValues = []
-                    S = sMatrices[i]
-                    for j in range(n):
-                        predValues.append([returnVec[j][i]])
-                    w = portFunc(np.asarray(predValues), S)[0]
-                    weights.append(w)
+                # Generate weights for each time period (ie daily weights):
+                weights = generateWeights(testingLen, portFunc, sMatrices,
+                                          returnVec, n, **kwargs)
 
                 realized = []
                 # Realize returns with portfolio weights for each time period:
@@ -155,6 +167,13 @@ def testModels(**kwargs):
                         temp.append(kwargs["realizedReturns"][j][i])
                     temp = opt.matrix(temp)
                     realized.append(blas.dot(weights[i].T, temp))
+                    if i is 0:
+                        '''print("hereeeeee")
+                        print(portFunc)
+                        print(sMatrices[i])
+                        print(weights[i])
+                        print("returns:")
+                        print(returnVec[0][i], returnVec[1][i])'''
 
                 # Standard deviation of portfolio returns:
                 stdDev = np.std(realized, ddof=1)
@@ -168,21 +187,23 @@ def testModels(**kwargs):
 
                 # Save results under the name of the modelType as a tuple
                 # of the standard deviation and realized returns:
-                name = str(modelType).capitalize() + str(sType).capitalize()\
+                name = str(modelType) + str(sType).capitalize()\
                        + str(portType).capitalize()
                 results.update({name: (stdDev, realized)})
                 print("\n{} Evaluated".format(str(name)))
 
 
     # Print results:
-    print("\n\nAnnualized Results:\n")
+    print("\n\nRealized Annual Results:\n")
     annualize = kwargs["periodsPerAnnum"]
     rf = kwargs["rf"]
     print("StDev  Rtn  Shrpe".rjust(outputRJust))
     for test in results:
         stdDev, realized = results[test]
         stdDev, avgRtn = stdDev*annualize**.5, np.mean(realized)*annualize
-        sharpe = (avgRtn - rf) / (stdDev)
+        sharpe = (avgRtn - rf) / stdDev
+        #plt.hist(realized, bins=int(np.sqrt(len(realized))))
+        #plt.show()
         result = "{} {:.3f} {:.3f} {:.3f}".format(test, round(stdDev, 3),
                                                   round(avgRtn, 3),
                                                   round(sharpe, 3))
