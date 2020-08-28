@@ -179,8 +179,9 @@ def importKenFrench(startDate='1963-07-01', endDate=None):
         # according to lambda x: np.log(x/100+1)
         df = web.DataReader(portfolio, 'famafrench', start=startDate,
                             end=endDate)[0]
-        df = df.transform(lambda x: np.log(x/100+1)).reset_index()
+
         n = len(df.columns)
+        df = df.transform(lambda x: np.log(x/100+1)).reset_index()
         for i in range(n):
             asset = str(list(df.columns)[i+1])
             temp = df[["Date", asset]]

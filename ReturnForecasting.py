@@ -27,7 +27,7 @@ def printRtnResults(model, xTrain, xTest, yTrain, yTest, yPred):
     yTest.reset_index(drop=True, inplace=True)
 
     # Print out results:
-    if extraDetails:
+    if tempThing:
         print("Coef:")
         coefs = pd.DataFrame(
                 np.array(list(zip(model.coef_, xTrain.columns))).reshape(-1, 2)).T

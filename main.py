@@ -45,6 +45,7 @@ def main():
                        "periodsPerAnnum": 12})
     kwargs = updateDict(**kwargs)
 
+
     annualize = kwargs["periodsPerAnnum"]
     dfDict = kwargs["dfDict"]
     testDates = (dfDict[list(dfDict.keys())[0]][1]).index

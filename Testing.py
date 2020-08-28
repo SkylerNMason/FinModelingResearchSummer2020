@@ -62,12 +62,18 @@ def basePerfGen(**kwargs):
 
 def printRtnModels(rtnModels, **kwargs):
     for modelType in rtnModels:
+        i = 0
         print(sBrk + "Testing:", modelType + sBrk)
         modelList = rtnModels[modelType]
         for model in modelList:
             xTrain, xTest, yTrain, yTest = kwargs["dfDict"][model]
             print(model + ":")
             yPred = modelList[model][1]
+            if extraDetails and i is 0:
+                plotData(pd.DataFrame(yTest).reset_index(drop=True),
+                         pd.DataFrame(yPred).reset_index(drop=True),
+                         modelType + ": yTest vs yPred for first asset")
+                i += 1
             printRtnResults(modelList[model][0], xTrain, xTest,
                             yTrain, yTest, yPred)
     return
