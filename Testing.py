@@ -3,8 +3,6 @@ from ReturnForecasting import *
 from PortfolioCreation import *
 from VolatilityForecasting import *
 from GlobalVariables import *
-from fredapi import Fred
-fred = Fred(api_key='93a721eba3644b125df12f223484e552')
 import dateutil.relativedelta
 
 
@@ -14,12 +12,14 @@ def updateDict(**kwargs):
     kwargs.update(new)
 
     realizedReturns = []  # Returns that occurred in actual reality
-    stdDevs = [] # Standard deviation of realized returns
+    stdDevs = []          # Standard deviation of realized returns
+    assetNames = []
     for asset in kwargs["dfDict"]:
         # Based on yTest data for each asset:
         returns = kwargs["dfDict"][asset][3]["Returns"].tolist()
         realizedReturns.append(returns)
         stdDevs.append(np.std(returns, ddof=1))
+        assetNames.append(str(asset).split(",")[0])
     if kwargs["rf"] is None:  # Generate the annual risk free rate
         # Get test dates range:
         dfDict = kwargs["dfDict"]
@@ -32,7 +32,9 @@ def updateDict(**kwargs):
         tb3m = fred.get_series("TB3MS", observation_start=start,
                                observation_end=end)
         kwargs["rf"] = np.mean(tb3m)/100
-    kwargs.update({"realizedReturns": realizedReturns, "stdDevs": stdDevs})
+    kwargs.update({"realizedReturns": realizedReturns, "stdDevs": stdDevs,
+                   "assetNames": assetNames,
+                   "testingLen": len(realizedReturns[0])})
     return kwargs
 
 
@@ -43,7 +45,7 @@ def defaultModelKwargs():
     # Make something like %Y%m to not use this feature
 
     kwargs = {"fileLocation": fileLocation,"periodsPerAnnum": 1,
-              "timeFormat": timeFormat, "testSize": .2, "alpha": -1,
+              "timeFormat": timeFormat, "testSize": .22, "alpha": -1,
               "minRsqrDifScorer": False, "randomState": None,
               "alphaRange": stdTestingRange, "normalize": True,
               "normFunc": StandardScaler, "primitives": None,
@@ -57,15 +59,57 @@ def basePerfGen(**kwargs):
     wgt, stdDev, rtn = oneN(kwargs["realizedReturns"])
     return stdDev, rtn
 
+
+def printRtnModels(rtnModels, **kwargs):
+    for modelType in rtnModels:
+        print(sBrk + "Testing:", modelType + sBrk)
+        modelList = rtnModels[modelType]
+        for model in modelList:
+            xTrain, xTest, yTrain, yTest = kwargs["dfDict"][model]
+            print(model + ":")
+            yPred = modelList[model][1]
+            printRtnResults(modelList[model][0], xTrain, xTest,
+                            yTrain, yTest, yPred)
+    return
+
+
+def printCovModels(sModels, **kwargs):
+    # Collects all of the values in a given set of matrices and prints out
+    # a matrix with the averages and standard deviations for each position
+    n = len(kwargs["dfDict"])
+    testingLen = kwargs["testingLen"]
+    for sType in sModels:
+        print(sBrk + "Testing:", sType)
+        sAvg = np.zeros(shape=(n, n))
+        sStdDev = np.zeros(shape=(n, n))
+        sMatrices = sModels[sType]
+        for row in range(n):
+            for col in range(n):
+                tempValues = []
+                for i in range(testingLen):
+                    tempValues.append(sMatrices[i][row][col])
+                sAvg[row][col] = np.mean(tempValues)
+                sStdDev[row][col] = np.std(tempValues, ddof=1)
+        np.set_printoptions(suppress=True, precision=6,
+                            formatter={'float': '{:0.6f}'.format})
+        print("Averaged entries from the covariance matrices:")
+        print(sAvg)
+        print(sBrk + "Standard deviation of the entries from the covariance matrices:")
+        print(sStdDev)
+
+    return
+
+
 def generateRtnModels(**kwargs):
     # Generates a dictionary of the return forecasting models for testing
     # TODO: Add more models to test with
     models = dict()
     fileNameaddition = "MinRsqrDifScorer" + str(kwargs["minRsqrDifScorer"])
     models["lassoModels"+fileNameaddition] = lassoReg(**kwargs)
-    #models["ridgeModels" + fileNameaddition] = ridgeReg(**kwargs)
+    models["ridgeModels" + fileNameaddition] = ridgeReg(**kwargs)
     #models["elasticModels" + fileNameaddition] = elasticNet(**kwargs)
     return models
+
 
 def generateCovariance(**kwargs):
     # Generates a covariance matrix for each testing time period
@@ -78,7 +122,7 @@ def generateCovariance(**kwargs):
     ### Assumption: covariance remains constant over time
     for i in range(testingLen):
         sMatrices.append(historicalCov(kwargs['dfDict'], testingLen-i))
-    #sModels["hist"] = sMatrices
+    sModels["hist"] = sMatrices
 
     sMatrices = []
     # Garch predicted covariance based on a rolling historical correlation:
@@ -96,30 +140,19 @@ def generateCovariance(**kwargs):
 def generatePortfolios():
     # Defines the portfolio we will be testing over
     portModels = dict()
-    #portModels["gmv"] = globalMinVarPortfolio
-    portModels["sharpe"] = sharpePortfolio
+    #portModels["bruteGMV"] = bruteGMV  # Is usually the same as cvxoptGMV
+    portModels["cvxoptGmv"] = globalMinVarPortfolio
     #portModels["oneNMixedGMV"] = oneNMixedGMV
-    #portModels["oneNMixedSharpe"] = oneNMixedSharpe
-    portModels["sharpe?"] = maxSomething
+    portModels["cvxoptSharpe"] = cvxoptSharpe
+    #portModels["bruteSharpe"] = bruteSharpe
     #portModels["weakSharpe"] = weakMaxSharpe
+    #portModels["oneNMixedSharpe"] = oneNMixedSharpe
     return portModels
-
-
-def printRtnModels(rtnModels, **kwargs):
-    for modelType in rtnModels:
-        print("\n\n")
-        print("Testing:", modelType, "\n")
-        modelList = rtnModels[modelType]
-        for model in modelList:
-            xTrain, xTest, yTrain, yTest = kwargs["dfDict"][model]
-            print(model + ":")
-            yPred = modelList[model][1]
-            printRtnResults(modelList[model][0], xTrain, xTest,
-                            yTrain, yTest, yPred)
 
 
 def testModels(**kwargs):
     results = dict()
+    n = len(kwargs['dfDict'])
 
     if kwargs["rtnModels"] is None:
         kwargs["rtnModels"] = generateRtnModels(**kwargs)
@@ -127,9 +160,12 @@ def testModels(**kwargs):
     # Print individual return model results:
     printRtnModels(**kwargs)
 
-    print("\nReturns Forecasted\n")
-    sModels = generateCovariance(**kwargs)
-    print("Covariance Forecasted\n\n\n")
+    print(sBrk + "Returns Forecasted" + brk)
+    kwargs["sModels"] = generateCovariance(**kwargs)
+    sModels = kwargs["sModels"]
+    if n < 9:
+        printCovModels(**kwargs)  # Cov matrices dont print properly if large
+    print(sBrk + "Covariance Forecasted" + brk)
     portModels = generatePortfolios()
 
     # Iterate through and test each model type one by one:
@@ -146,7 +182,7 @@ def testModels(**kwargs):
             returnVec.append(preds)
 
 
-        testingLen = len(preds)
+        testingLen = kwargs["testingLen"]
         # Iterate through and test each covariance forecast one by one
         for sType in sModels:
             sMatrices = sModels[sType]
@@ -156,7 +192,7 @@ def testModels(**kwargs):
                 portFunc = portModels[portType]
 
                 # Generate weights for each time period (ie daily weights):
-                weights = generateWeights(testingLen, portFunc, sMatrices,
+                weights = generateWeights(portFunc, sMatrices,
                                           returnVec, n, **kwargs)
 
                 realized = []
@@ -167,13 +203,6 @@ def testModels(**kwargs):
                         temp.append(kwargs["realizedReturns"][j][i])
                     temp = opt.matrix(temp)
                     realized.append(blas.dot(weights[i].T, temp))
-                    if i is 0:
-                        '''print("hereeeeee")
-                        print(portFunc)
-                        print(sMatrices[i])
-                        print(weights[i])
-                        print("returns:")
-                        print(returnVec[0][i], returnVec[1][i])'''
 
                 # Standard deviation of portfolio returns:
                 stdDev = np.std(realized, ddof=1)
@@ -190,11 +219,24 @@ def testModels(**kwargs):
                 name = str(modelType) + str(sType).capitalize()\
                        + str(portType).capitalize()
                 results.update({name: (stdDev, realized)})
-                print("\n{} Evaluated".format(str(name)))
+
+                # Portfolio results printout:
+                print(sBrk + "{} Evaluated".format(str(name)))
+                print("Average Weights:")
+                temp = np.concatenate(weights, axis=1)
+                for i in range(n):
+                    output = kwargs["assetNames"][i] + ": {:.5f}"\
+                        .format(round(np.mean(temp[i]), 5))
+                    print(output.rjust(outputRJust))
+                print("Standard Deviation of Weights:")
+                for i in range(n):
+                    output = kwargs["assetNames"][i] + ": {:.5f}"\
+                        .format(round(np.std(temp[i], ddof=1), 5))
+                    print(output.rjust(outputRJust))
 
 
-    # Print results:
-    print("\n\nRealized Annual Results:\n")
+    # Print all results:
+    print(brk + "Realized Annual Results:" + sBrk)
     annualize = kwargs["periodsPerAnnum"]
     rf = kwargs["rf"]
     print("StDev  Rtn  Shrpe".rjust(outputRJust))
@@ -208,6 +250,19 @@ def testModels(**kwargs):
                                                   round(avgRtn, 3),
                                                   round(sharpe, 3))
         print(result.rjust(outputRJust))
+
+    # Print top results
+    print(brk + "Top Realized Annual Results:" + sBrk)
+    print("StDev  Rtn  Shrpe".rjust(outputRJust))
+    for test in results:
+        stdDev, realized = results[test]
+        stdDev, avgRtn = stdDev*annualize**.5, np.mean(realized)*annualize
+        sharpe = (avgRtn - rf) / stdDev
+        result = "{} {:.3f} {:.3f} {:.3f}".format(test, round(stdDev, 3),
+                                                  round(avgRtn, 3),
+                                                  round(sharpe, 3))
+        if sharpe >= kwargs["baseSharpe"]:
+            print(result.rjust(outputRJust))
 
     return results
 

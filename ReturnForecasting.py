@@ -27,19 +27,19 @@ def printRtnResults(model, xTrain, xTest, yTrain, yTest, yPred):
     yTest.reset_index(drop=True, inplace=True)
 
     # Print out results:
-    print("Coef:")
-    coefs = pd.DataFrame(
-            np.array(list(zip(model.coef_, xTrain.columns))).reshape(-1, 2)).T
-    print(coefs.to_string(index=False))
+    if extraDetails:
+        print("Coef:")
+        coefs = pd.DataFrame(
+                np.array(list(zip(model.coef_, xTrain.columns))).reshape(-1, 2)).T
+        print(coefs.to_string(index=False))
     try:
         print("Alpha:", model.alpha_)
     except:
         try: print("Alpha:", model.alphas_)
-        except: print("Alpha: na")
+        except: pass
     try:
         print("Lambda:", model.l1_ratio_)
-    except:
-        print("Lambda: na")
+    except: pass
         # Graphing:
     '''
     results = pd.DataFrame({"Actual": yTest, "Predicted": yPred})

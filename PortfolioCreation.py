@@ -9,13 +9,14 @@ from GlobalVariables import *
 # an svm algo says will have a positive return
 
 
-def generateWeights(testingLen, portFunc, sMatrices, returnVec, n, **kwargs):
+def generateWeights(portFunc, sMatrices, returnVec, n, **kwargs):
     # Generates the asset weights for a given portfolio function over all
     # of the testing periods
     weights = []
+    testingLen = kwargs["testingLen"]
 
     if str(portFunc.__name__).startswith("oneNMixed"):
-        return portFunc(testingLen, sMatrices, returnVec, n, **kwargs)
+        return portFunc(sMatrices, returnVec, n, **kwargs)
 
     for i in range(testingLen):
         predValues = []  # Predicted weights
@@ -27,20 +28,22 @@ def generateWeights(testingLen, portFunc, sMatrices, returnVec, n, **kwargs):
     return weights
 
 
-def oneNMixedGMV(testingLen, sMatrices, returnVec, n, **kwargs):
-    weights = generateWeights(testingLen, globalMinVarPortfolio, sMatrices,
+def oneNMixedGMV(sMatrices, returnVec, n, **kwargs):
+    weights = generateWeights(globalMinVarPortfolio, sMatrices,
                               returnVec, n, **kwargs)
-    return oneNMixedPortfolio(testingLen, returnVec, n, weights, **kwargs)
+    return oneNMixedPortfolio(returnVec, n, weights, **kwargs)
 
 
-def oneNMixedSharpe(testingLen, sMatrices, returnVec, n, **kwargs):
-    weights = generateWeights(testingLen, sharpePortfolio, sMatrices,
+def oneNMixedSharpe(sMatrices, returnVec, n, **kwargs):
+    weights = generateWeights(cvxoptSharpe, sMatrices,
                               returnVec, n, **kwargs)
-    return oneNMixedPortfolio(testingLen, returnVec, n, weights, **kwargs)
+    return oneNMixedPortfolio(returnVec, n, weights, **kwargs)
 
 
-def oneNMixedPortfolio(testingLen, returnVec, n, weights, **kwargs):
+def oneNMixedPortfolio(returnVec, n, weights, **kwargs):
+    # Takes a set of weights and trys
     alphas = np.array(range(101))/100
+    testingLen = kwargs["testingLen"]
     #alphas = [.7]
     X = []
     Y = []
@@ -75,8 +78,8 @@ def oneNMixedPortfolio(testingLen, returnVec, n, weights, **kwargs):
             bestWeights = tempWgts
     #print(X)
     #print(Y)
-    plt.plot(X, Y)
-    plt.show()
+    #plt.plot(X, Y)
+    #plt.show()
     return bestWeights
 
 
@@ -98,7 +101,7 @@ def oneN(returnVec, S=None, **kwargs):
 # https://www.quantopian.com/posts/the-efficient-frontier-markowitz-portfolio-optimization-in-python
 
 
-def sharpePortfolio(returnVec, S=None, **kwargs):
+def cvxoptSharpe(returnVec, S=None, **kwargs):
     original = returnVec
     # Creates a portfolio with the highest sharpe ratio
     # in an efficient frontier (might be wrong?)
@@ -129,10 +132,11 @@ def sharpePortfolio(returnVec, S=None, **kwargs):
     # Calculate the optimal portfolio
     sol = solvers.qp(opt.matrix(x1 * S), -pbar, G, h, A, b)
     wgt = sol['x']
-    print("break")
-    print(calc_portfolio_perf(np.asarray(wgt), original, S, .00572)[2])
+    '''print("break")
+    print(calc_portfolio_perf(np.asarray(wgt), original, S, kwargs["rf"],
+                              kwargs["periodsPerAnnum"])[2])
     print(wgt)
-    print("break")
+    print("break")'''
     return wgt, riskVec, returnVec
 
 
@@ -162,7 +166,8 @@ def globalMinVarPortfolio(returnVec, S=None, **kwargs):
     return wgt, risk, rtn
 
 
-# Testing start
+# Below function are adapted from:
+# https://www.pythonforfinance.net/2019/07/02/investment-portfolio-optimisation-with-python-revisited/
 
 
 def calc_portfolio_perf(weights, mean_returns, cov, rf, annualize):
@@ -172,9 +177,9 @@ def calc_portfolio_perf(weights, mean_returns, cov, rf, annualize):
     sharpe_ratio = (portfolio_return - rf) / portfolio_std
     return portfolio_return, portfolio_std, sharpe_ratio
 
-tickers = ["1", "2"]
 
-def simulate_random_portfolios(num_portfolios, mean_returns, cov, rf, annualize):
+def simulate_random_portfolios(num_portfolios, mean_returns, cov, rf,
+                               annualize,  assetNames):
     results_matrix = np.zeros((len(mean_returns) + 3, num_portfolios))
     for i in range(num_portfolios):
         weights = np.random.random(len(mean_returns))
@@ -191,40 +196,39 @@ def simulate_random_portfolios(num_portfolios, mean_returns, cov, rf, annualize)
     results_df = pd.DataFrame(results_matrix.T,
                               columns=['ret', 'stdev', 'sharpe'] + [ticker for
                                                                     ticker in
-                                                                    tickers])
+                                                                    assetNames])
 
     return results_df
 
 
-def maxSomething(returnVec, S, rf, **kwargs):
-    num_portfolios = 5000
+def bruteSharpe(returnVec, S, **kwargs):
+    # Wrapper for brute sharpe and GMV
+    return bruteSharpeAndGMV(returnVec, S, **kwargs)[0]
+
+
+def bruteGMV(returnVec, S, **kwargs):
+    # Wrapper for brute sharpe and GMV
+    return bruteSharpeAndGMV(returnVec, S, **kwargs)[1]
+
+
+def bruteSharpeAndGMV(returnVec, S, rf, assetNames, **kwargs):
+    # Generates a bunch of portfolios that represent 'all' possible portfolios
+    # and picks the best of the bunch
+    num_portfolios = len(returnVec)*1000
+    annualize = kwargs['periodsPerAnnum']
     results_frame = simulate_random_portfolios(num_portfolios, returnVec, S, rf,
-                                               kwargs['periodsPerAnnum'])
+                                               annualize, assetNames)
     # locate position of portfolio with highest Sharpe Ratio
     max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
     risk, rtn, wgt = max_sharpe_port[1], max_sharpe_port[0], max_sharpe_port[3:]
     wgt = opt.matrix(wgt)
+    sharpe = (wgt, risk, rtn)
     # locate positon of portfolio with minimum standard deviation
-    #min_vol_port = results_frame.iloc[results_frame['stdev'].idxmin()]
-    # create scatter plot coloured by Sharpe Ratio
-    '''plt.subplots(figsize=(15, 10))
-    plt.scatter(results_frame.stdev, results_frame.ret, c=results_frame.sharpe,
-                cmap='RdYlBu')
-    plt.xlabel('Standard Deviation')
-    plt.ylabel('Returns')
-    plt.colorbar()
-    # plot red star to highlight position of portfolio with highest Sharpe Ratio
-    plt.scatter(max_sharpe_port[1], max_sharpe_port[0], marker=(5, 1, 0),
-                color='r', s=500)
-    # plot green star to highlight position of minimum variance portfolio
-    plt.scatter(min_vol_port[1], min_vol_port[0], marker=(5, 1, 0), color='g',
-                s=500)
-    plt.show()'''
-    print("reak")
-    print(calc_portfolio_perf(np.asarray(wgt), returnVec, S, .00572)[2])
-    print(wgt)
-    print("break")
-    return wgt, risk, rtn
+    min_vol_port = results_frame.iloc[results_frame['stdev'].idxmin()]
+    risk, rtn, wgt = min_vol_port[1], min_vol_port[0], min_vol_port[3:]
+    wgt = opt.matrix(wgt)
+    gmv = (wgt, risk, rtn)
+    return sharpe, gmv
 
 
 def calc_neg_sharpe(weights, mean_returns, cov, rf, annualize):
@@ -245,23 +249,11 @@ def weakMaxSharpe(mean_returns, cov, rf, **kwargs):
     result = sco.minimize(calc_neg_sharpe, num_assets*[1./num_assets,], args=args,
                         method='SLSQP', bounds=bounds, constraints=constraints)
     wgt = opt.matrix(result['x'])
-    print("eak")
-    print(calc_portfolio_perf(np.asarray(wgt), mean_returns, cov, rf)[2])
-    print(wgt)
-    print("break")
     return wgt, 0
 
-# Testing end
+# Reference end
 
 
 # Check out
 # https://investresolve.com/blog/portfolio-optimization-simple-optimal-methods/
 # for ideas on types of portfolios to test
-
-
-def localTest():
-    returnVec1 = generateRandomReturns(2, 100)
-    returnVec1 = [[.5, .5, .5], [0, 0, 0]]
-    print(returnVec1)
-    weights, risks, returns = globalMinVarPortfolio(returnVec1)
-    return list(weights), risks, returns

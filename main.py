@@ -6,7 +6,7 @@ Programmed By Skyler Mason
 
 Installed plugins:
 pandas
-pandas_datareader (?)
+pandas_datareader
 matplotlib (?)
 xlrd
 cvxopt
@@ -46,7 +46,32 @@ def main():
     kwargs = updateDict(**kwargs)
 
     annualize = kwargs["periodsPerAnnum"]
-    print("Data Imported\n")
+    dfDict = kwargs["dfDict"]
+    testDates = (dfDict[list(dfDict.keys())[0]][1]).index
+    start = list(testDates)[0]
+    end = list(testDates)[-1]
+    print(sBrk + "Test period starts:", start)
+    print("Test period ends:", end)
+    # Print out for the assets in use:
+    print(sBrk + "Assets:" + sBrk)
+    for i in range(len(kwargs["dfDict"])):
+        xTrain, xTest, yTrain, yTest = list(kwargs["dfDict"].values())[i]
+        print(kwargs["assetNames"][i])
+        print("Annualized Training Values:")
+        yTrain = yTrain["Returns"]
+        print("Average return: {:.3f}".format(round(np.mean(yTrain)*annualize,
+                                                    3)).rjust(outputRJust))
+        print("Average standard deviation: {:.3f}".format(round(
+              np.std(yTrain, ddof=1)*(annualize**.5), 3)).rjust(outputRJust))
+
+        print("Annualized Testing Values:")
+        yTest = yTest["Returns"]
+        print("Average return: {:.3f}".format(round(np.mean(yTest)*annualize,
+                                                    3)).rjust(outputRJust))
+        print("Average standard deviation: {:.3f}".format(round(
+              np.std(yTest, ddof=1)*(annualize**.5), 3)).rjust(outputRJust))
+        print()
+    print(sBrk + "Data Imported" + brk)
 
     # Baseline performance with one/n portfolio:
     basePerfRisk, basePerfRtn = basePerfGen(**kwargs)  # [Std. dev., return]
@@ -56,6 +81,7 @@ def main():
     # Note: risk premium is calculated based on averages and so
     # results in a very slightly different calculation
     sharpe = (basePerfRtn - kwargs["rf"]) / basePerfRisk
+    kwargs["baseSharpe"] = sharpe
     testModels(**kwargs)
 
     result = "Baseline {:.3f} {:.3f} {:.3f}".format(round(basePerfRisk, 3),
@@ -64,8 +90,7 @@ def main():
     print(result.rjust(outputRJust))
     print("Rf: {:.5f}".format(kwargs["rf"]).rjust(outputRJust))
 
-
-    print("\nDone")
+    print(sBrk + "Done")
 
     return 0
 
